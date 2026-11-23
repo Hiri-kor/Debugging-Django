@@ -1,0 +1,925 @@
+<!doctype html>
+<html lang="ko">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>body{margin:0}[hidden]{display:none!important}img{max-width:100%}</style>
+<title>Booklog 디버깅 랩</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: sticky tab bar over a single 960px column; each view is a stack of request-line cards, like a Postman history. */
+:root {
+  --bg: #f2f5f4;
+  --surface: #ffffff;
+  --sunk: #e8eeec;
+  --ink: #16211d;
+  --muted: #56665f;
+  --line: #d3dcd8;
+  --accent: #0d6a66;
+  --accent-ink: #ffffff;
+  --accent-soft: #d8ecea;
+  --ok: #1c7a3d;   --ok-soft: #dcf0e2;
+  --warn: #9a5c00; --warn-soft: #f8ead2;
+  --err: #b8322a;  --err-soft: #f8dfdc;
+  --info: #2c5aa8; --info-soft: #dde6f6;
+  --code-bg: #f7f9f8;
+  --add-bg: #e3f4e7; --del-bg: #fbe5e2;
+  --f-body: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, "Cascadia Code", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1514; --surface: #161e1c; --sunk: #1d2725; --ink: #e4ebe8; --muted: #97a8a1; --line: #2b3734;
+    --accent: #52c2b5; --accent-ink: #0b1312; --accent-soft: #173a37;
+    --ok: #5fcf85; --ok-soft: #173322; --warn: #e6a748; --warn-soft: #3a2a12; --err: #f07b70; --err-soft: #3d1c19; --info: #86a9ec; --info-soft: #1c2a45;
+    --code-bg: #121a18; --add-bg: #15301f; --del-bg: #3a1a18;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1514; --surface: #161e1c; --sunk: #1d2725; --ink: #e4ebe8; --muted: #97a8a1; --line: #2b3734;
+  --accent: #52c2b5; --accent-ink: #0b1312; --accent-soft: #173a37;
+  --ok: #5fcf85; --ok-soft: #173322; --warn: #e6a748; --warn-soft: #3a2a12; --err: #f07b70; --err-soft: #3d1c19; --info: #86a9ec; --info-soft: #1c2a45;
+  --code-bg: #121a18; --add-bg: #15301f; --del-bg: #3a1a18;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 15px; line-height: 1.65; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--surface); }
+h1, h2, h3 { line-height: 1.3; text-wrap: balance; margin: 0; }
+h1 { font-size: 1.75rem; font-weight: 700; letter-spacing: -0.01em; }
+h2 { font-size: 1.3rem; font-weight: 700; }
+h3 { font-size: 1.05rem; font-weight: 700; }
+p { margin: 0; }
+code, .mono { font-family: var(--f-mono); font-size: 0.88em; }
+:not(pre) > code { background: var(--sunk); padding: 0.1em 0.35em; border-radius: 4px; }
+a { color: var(--accent); }
+button { font: inherit; color: inherit; cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.wrap { max-width: 960px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+
+/* header */
+.top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--surface); border-bottom: 1px solid var(--line); }
+.top .wrap { display: flex; flex-direction: column; gap: 8px; padding-block: 12px 0; }
+.brand { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.brand b { font-size: 1.05rem; }
+.brand span { color: var(--muted); font-size: 0.85rem; }
+.tabs { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; }
+.tabs::-webkit-scrollbar { display: none; }
+.tabs a { flex: none; padding: 8px 12px; text-decoration: none; color: var(--muted); font-weight: 500; font-size: 0.92rem; border-bottom: 2px solid transparent; white-space: nowrap; }
+.tabs a[aria-current="page"] { color: var(--ink); border-bottom-color: var(--accent); }
+.tabs a:hover { color: var(--ink); }
+
+main .wrap { padding-block: 28px 64px; display: flex; flex-direction: column; gap: 28px; }
+.view { display: flex; flex-direction: column; gap: 24px; }
+.lede { color: var(--muted); max-width: 65ch; }
+.eyebrow { font-size: 0.75rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+.section-head { display: flex; flex-direction: column; gap: 6px; }
+
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 20px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+
+/* status chips */
+.chip { display: inline-flex; align-items: center; gap: 6px; font-family: var(--f-mono); font-size: 0.78rem; font-weight: 600; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+.chip.ok { background: var(--ok-soft); color: var(--ok); }
+.chip.err { background: var(--err-soft); color: var(--err); }
+.chip.warn { background: var(--warn-soft); color: var(--warn); }
+.chip.info { background: var(--info-soft); color: var(--info); }
+.chip.neutral { background: var(--sunk); color: var(--muted); }
+
+.method { font-family: var(--f-mono); font-weight: 600; font-size: 0.8rem; padding: 2px 8px; border-radius: 5px; color: var(--accent-ink); }
+.m-GET { background: var(--ok); } .m-POST { background: var(--warn); } .m-PUT { background: var(--info); } .m-DELETE { background: var(--err); }
+
+/* overview */
+.stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.stat { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 2px; }
+.stat .n { font-size: 1.6rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.stat .l { color: var(--muted); font-size: 0.85rem; }
+@media (max-width: 640px) { .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+.score-table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+.score-table th, .score-table td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+.score-table th { font-size: 0.78rem; color: var(--muted); font-weight: 500; letter-spacing: 0.04em; }
+.score-table td.num { font-variant-numeric: tabular-nums; text-align: right; }
+.score-table tr:last-child td { border-bottom: 0; }
+.score-table a { text-decoration: none; font-weight: 500; }
+.scroll-x { overflow-x: auto; }
+
+/* pipeline diagram */
+.pipe { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; counter-reset: st; }
+.stage { border: 1px solid var(--line); border-radius: 8px; padding: 12px; background: var(--code-bg); display: flex; flex-direction: column; gap: 6px; position: relative; }
+.stage .where { font-family: var(--f-mono); font-size: 0.75rem; color: var(--muted); }
+.stage .what { font-weight: 700; font-size: 0.92rem; }
+.stage .tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: auto; }
+.stage .tags a { font-family: var(--f-mono); font-size: 0.72rem; font-weight: 600; text-decoration: none; padding: 1px 6px; border-radius: 4px; background: var(--accent-soft); color: var(--accent); }
+@media (max-width: 760px) { .pipe { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+.callout { border: 1px solid var(--line); border-left: 3px solid var(--warn); background: var(--warn-soft); padding: 12px 14px; border-radius: 6px; }
+.callout.info { border-left-color: var(--info); background: var(--info-soft); }
+.callout b { display: block; margin-bottom: 2px; }
+
+ul.clean { margin: 0; padding-left: 1.2em; display: flex; flex-direction: column; gap: 4px; }
+
+/* problem cards */
+.pnav { display: flex; flex-wrap: wrap; gap: 6px; }
+.pnav button { border: 1px solid var(--line); background: var(--surface); border-radius: 6px; padding: 4px 10px; font-family: var(--f-mono); font-size: 0.82rem; display: inline-flex; align-items: center; gap: 6px; }
+.pnav button .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--line); }
+.pnav button .dot.ok { background: var(--ok); } .pnav button .dot.err { background: var(--err); }
+.pnav button.on { border-color: var(--accent); background: var(--accent-soft); }
+
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; min-width: 0; }
+.card-head { padding: 18px 20px 14px; display: flex; flex-direction: column; gap: 10px; border-bottom: 1px solid var(--line); }
+.card-title { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.card-title .no { font-family: var(--f-mono); color: var(--accent); font-weight: 600; }
+.card-title .pts { margin-left: auto; color: var(--muted); font-size: 0.85rem; font-variant-numeric: tabular-nums; }
+.reqline { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; background: var(--code-bg); border: 1px solid var(--line); border-radius: 6px; padding: 7px 10px; }
+.reqline .url { font-family: var(--f-mono); font-size: 0.86rem; overflow-wrap: anywhere; }
+.reqline .file { margin-left: auto; font-family: var(--f-mono); font-size: 0.78rem; color: var(--muted); }
+.card-body { padding: 16px 20px 20px; display: flex; flex-direction: column; gap: 16px; }
+.compare { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.compare > div { border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; font-size: 0.92rem; }
+.compare .bad { background: var(--err-soft); }
+.compare .good { background: var(--ok-soft); }
+.compare .lbl { font-size: 0.75rem; font-weight: 700; letter-spacing: 0.06em; }
+.compare .bad .lbl { color: var(--err); } .compare .good .lbl { color: var(--ok); }
+@media (max-width: 600px) { .compare { grid-template-columns: 1fr; } }
+
+.mine { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 0.88rem; color: var(--muted); }
+
+details.step { border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+details.step > summary { list-style: none; cursor: pointer; padding: 10px 14px; font-weight: 500; display: flex; align-items: center; gap: 8px; }
+details.step > summary::-webkit-details-marker { display: none; }
+details.step > summary::before { content: "▸"; color: var(--accent); transition: transform .15s; }
+details.step[open] > summary::before { transform: rotate(90deg); }
+details.step > .inner { padding: 0 14px 14px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+@media (prefers-reduced-motion: reduce) { details.step > summary::before { transition: none; } }
+
+pre.code { margin: 0; background: var(--code-bg); border: 1px solid var(--line); border-radius: 6px; padding: 10px 0; overflow-x: auto; font-family: var(--f-mono); font-size: 0.82rem; line-height: 1.6; }
+pre.code .ln { display: block; padding: 0 14px 0 10px; white-space: pre; min-width: max-content; }
+pre.code .ln.add { background: var(--add-bg); }
+pre.code .ln.del { background: var(--del-bg); text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--err) 50%, transparent); }
+pre.code .ln .mk { display: inline-block; width: 1.4em; color: var(--muted); user-select: none; }
+pre.code .ln.add .mk { color: var(--ok); } pre.code .ln.del .mk { color: var(--err); }
+pre.code .cm { color: var(--muted); font-style: italic; }
+
+.why { display: flex; flex-direction: column; gap: 8px; max-width: 70ch; }
+.variants li { color: var(--ink); }
+.selfmark { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; padding-top: 4px; border-top: 1px dashed var(--line); padding-top: 14px; }
+.selfmark span { color: var(--muted); font-size: 0.88rem; margin-right: 4px; }
+.btn { border: 1px solid var(--line); background: var(--surface); border-radius: 6px; padding: 6px 12px; font-size: 0.88rem; font-weight: 500; }
+.btn:hover { border-color: var(--accent); }
+.btn.sel-ok { background: var(--ok-soft); border-color: var(--ok); color: var(--ok); }
+.btn.sel-err { background: var(--err-soft); border-color: var(--err); color: var(--err); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+
+/* essay */
+.essay-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.essay-grid > div { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.essay-grid .lbl { font-size: 0.75rem; font-weight: 700; letter-spacing: 0.06em; color: var(--muted); }
+.answer-box { background: var(--code-bg); border: 1px solid var(--line); border-radius: 6px; padding: 12px 14px; font-size: 0.92rem; white-space: pre-wrap; }
+@media (max-width: 700px) { .essay-grid { grid-template-columns: 1fr; } }
+.method-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+.method-table td, .method-table th { padding: 8px 10px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+.method-table th { font-size: 0.78rem; color: var(--muted); font-weight: 500; }
+textarea { width: 100%; min-height: 120px; font: inherit; font-size: 0.92rem; padding: 10px 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); resize: vertical; }
+
+/* quiz */
+.quiz-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.progress { flex: 1; min-width: 160px; height: 8px; background: var(--sunk); border-radius: 999px; overflow: hidden; }
+.progress > i { display: block; height: 100%; background: var(--accent); width: 0; transition: width .2s; }
+.q { display: flex; flex-direction: column; gap: 12px; }
+.q .ask { font-weight: 500; }
+.choices { display: grid; gap: 8px; }
+.choices button { text-align: left; border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 10px 12px; font-size: 0.92rem; display: flex; gap: 10px; align-items: flex-start; }
+.choices button .k { font-family: var(--f-mono); color: var(--muted); font-weight: 600; flex: none; }
+.choices button:hover:not(:disabled) { border-color: var(--accent); }
+.choices button:disabled { cursor: default; }
+.choices button.right { border-color: var(--ok); background: var(--ok-soft); }
+.choices button.wrong { border-color: var(--err); background: var(--err-soft); }
+.explain { border-radius: 8px; padding: 12px 14px; background: var(--sunk); font-size: 0.92rem; display: flex; flex-direction: column; gap: 8px; }
+
+/* error dictionary */
+.err-list { display: flex; flex-direction: column; gap: 10px; }
+.err-row { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 6px 18px; }
+.err-row .sig { font-family: var(--f-mono); font-size: 0.82rem; overflow-wrap: anywhere; }
+.err-row .fix { font-size: 0.9rem; }
+.err-row .fix b { color: var(--accent); font-weight: 500; font-family: var(--f-mono); font-size: 0.82rem; }
+@media (max-width: 700px) { .err-row { grid-template-columns: 1fr; } }
+.search { width: 100%; font: inherit; padding: 9px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); }
+
+/* checklist */
+.check { display: flex; flex-direction: column; gap: 2px; }
+.check label { display: flex; gap: 12px; align-items: flex-start; padding: 10px 12px; border-radius: 8px; cursor: pointer; }
+.check label:hover { background: var(--sunk); }
+.check input { margin-top: 5px; width: 17px; height: 17px; accent-color: var(--accent); flex: none; }
+.check .t { display: flex; flex-direction: column; }
+.check .t small { color: var(--muted); font-size: 0.84rem; }
+.check input:checked + .t > span { color: var(--muted); text-decoration: line-through; }
+</style>
+
+<header class="top">
+  <div class="wrap">
+    <div class="brand"><b>Booklog 디버깅 랩</b><span>SSAFY 16기 5회차 월말평가 · DRF 디버깅 재시험 대비</span></div>
+    <nav class="tabs" id="tabs">
+      <a href="#overview">개요</a>
+      <a href="#problems">문제 01–09</a>
+      <a href="#essay">서술형 10·11</a>
+      <a href="#quiz">변형 퀴즈</a>
+      <a href="#errors">에러 사전</a>
+      <a href="#checklist">제출 체크리스트</a>
+    </nav>
+  </div>
+</header>
+
+<main><div class="wrap">
+
+<!-- ============ OVERVIEW ============ -->
+<section class="view" id="v-overview">
+  <div class="section-head">
+    <span class="eyebrow">시험 분석</span>
+    <h1>요청이 어디서 틀어졌는지 찾는 시험</h1>
+    <p class="lede">문제 9개는 모두 “현재 증상 → 정상 동작”을 Postman 응답으로 보여주고, 고칠 파일을 하나로 지정합니다. 상태 코드와 응답 본문만 보고 요청 처리 흐름의 어느 단계가 고장 났는지 짚어내면 됩니다.</p>
+  </div>
+
+  <div class="stats">
+    <div class="stat"><span class="n">100</span><span class="l">총점 (코드 80 + 서술 20)</span></div>
+    <div class="stat"><span class="n">2</span><span class="l">수정 파일 (views · serializers)</span></div>
+    <div class="stat"><span class="n" id="ov-solved">5 / 9</span><span class="l">내 스켈레톤에서 해결된 문제</span></div>
+    <div class="stat"><span class="n" id="ov-self">0 / 9</span><span class="l">혼자 다시 풀어 본 문제</span></div>
+  </div>
+
+  <div class="panel">
+    <h2>요청 처리 흐름과 문제 위치</h2>
+    <p class="lede">DRF 함수형 뷰에서 요청 하나가 지나가는 순서입니다. 각 칸의 번호를 누르면 해당 문제로 이동합니다. 상태 코드가 어느 칸에서 만들어지는지 외워 두면 증상만 보고 고칠 곳을 좁힐 수 있습니다.</p>
+    <div class="pipe">
+      <div class="stage"><span class="where">urls.py</span><span class="what">URL 매칭</span><span class="chip neutral">없으면 404</span><div class="tags"></div></div>
+      <div class="stage"><span class="where">@api_view([...])</span><span class="what">메서드 허용 검사</span><span class="chip err">없으면 405</span><div class="tags"><a href="#p08">08</a></div></div>
+      <div class="stage"><span class="where">get_object_or_404</span><span class="what">객체 조회</span><span class="chip neutral">없으면 404</span><div class="tags"></div></div>
+      <div class="stage"><span class="where">Serializer(instance, data, partial)</span><span class="what">Serializer 생성 인자</span><span class="chip info">수정·생성 결정</span><div class="tags"><a href="#p04">04</a></div></div>
+      <div class="stage"><span class="where">.is_valid()</span><span class="what">입력 검증 (fields · read_only)</span><span class="chip err">실패 시 400</span><div class="tags"><a href="#p03">03</a><a href="#p04">04</a></div></div>
+      <div class="stage"><span class="where">.save()</span><span class="what">DB 반영 (create / update)</span><span class="chip warn">빠지면 저장 안 됨</span><div class="tags"><a href="#p09">09</a></div></div>
+      <div class="stage"><span class="where">.data</span><span class="what">출력 직렬화 (fields · 중첩 · MethodField)</span><span class="chip info">응답 본문</span><div class="tags"><a href="#p01">01</a><a href="#p06">06</a><a href="#p07">07</a></div></div>
+      <div class="stage"><span class="where">Response(status=)</span><span class="what">상태 코드 결정</span><span class="chip ok">기본값 200</span><div class="tags"><a href="#p02">02</a><a href="#p05">05</a></div></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>배점과 내 코드 상태</h2>
+    <p class="lede">현재 <code>skeleton/</code> 코드를 주어진 DB의 복사본에 실제 요청으로 돌려 본 결과입니다(2026-11-23 확인). 코드 문항 기준 <b>45 / 80점</b>까지 동작합니다. 다만 고친 줄에 설명 주석이 없으면 감점될 수 있습니다.</p>
+    <div class="scroll-x"><table class="score-table" id="score-table">
+      <thead><tr><th>번호</th><th>요청</th><th>수정 파일</th><th>배점</th><th>내 코드</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+  </div>
+
+  <div class="panel">
+    <h2>감점을 부르는 규칙</h2>
+    <ul class="clean">
+      <li><b>지정 파일 밖을 고치면 기능이 맞아도 오답</b>입니다. 04번은 <code>views.py</code>에서만 고쳐야 하므로 serializer에 <code>required=False</code>를 붙이는 풀이는 0점입니다.</li>
+      <li>함수명·파일명은 바꾸지 않습니다. <code>book_detail</code>을 <code>detail</code>로 바꾸면 안 됩니다.</li>
+      <li><b>고친 줄마다 설명 주석</b>을 답니다. “주석 설명이 없거나 미흡한 경우” 감점 항목이 있습니다.</li>
+      <li>한 문제를 고치다 다른 문제를 깨뜨리면 감점입니다. 03번의 <code>read_only_fields</code>는 09번 댓글 수정에도 영향을 주니 두 요청을 모두 다시 보내 보세요.</li>
+      <li>못 푼 문제는 주석 처리해서라도 <code>runserver</code>가 뜨는 상태로 제출합니다. 서버가 안 뜨면 전체가 감점 또는 0점입니다.</li>
+      <li><code>models.py</code>는 손대지 않습니다. 주어진 <code>db.sqlite3</code>와 어긋나 서버가 깨질 수 있습니다.</li>
+    </ul>
+  </div>
+
+  <div class="callout info">
+    <b>연습하다 DB가 바뀌었다면</b>
+    지금 DB에서는 도서 5번과 댓글 1번이 이미 삭제되어 있어 PDF 예시와 같은 pk로 요청하면 404가 납니다. 원래 상태로 돌리려면 <code>db.sqlite3</code>를 지우고 <code>python manage.py migrate</code> → <code>python manage.py loaddata books.json comments.json</code>을 실행하세요. 시험장에서는 주어진 DB를 그대로 써야 합니다.
+  </div>
+</section>
+
+<!-- ============ PROBLEMS ============ -->
+<section class="view" id="v-problems" hidden>
+  <div class="section-head">
+    <span class="eyebrow">문제 01–09 · 코드 80점</span>
+    <h1>증상을 보고 한 줄을 찾기</h1>
+    <p class="lede">카드마다 버그가 든 원래 코드를 보여 줍니다. 먼저 혼자 고칠 줄을 정한 뒤 힌트, 정답 순서로 펼쳐 보세요. 마지막에 스스로 채점하면 개요 탭에 반영됩니다.</p>
+  </div>
+  <div class="pnav" id="pnav"></div>
+  <div id="cards" style="display:flex;flex-direction:column;gap:20px"></div>
+</section>
+
+<!-- ============ ESSAY ============ -->
+<section class="view" id="v-essay" hidden>
+  <div class="section-head">
+    <span class="eyebrow">서술형 · 20점</span>
+    <h1>키워드에 근거와 예시를 붙이기</h1>
+    <p class="lede">지금 답안은 키워드는 맞지만 한 줄짜리라 부분 점수에 머물 가능성이 큽니다. 10점짜리 문항이니 목적, 동작 방식, 이 프로젝트의 예시까지 적어 주세요. 답안은 <code>problem_10_11.md</code>의 [답안 작성] 아래에만 쓰고, 문제 문장과 <code>---</code> 구분선은 지우지 않습니다.</p>
+  </div>
+
+  <div class="panel">
+    <div class="card-title"><span class="no">10</span><h2>HTTP Request Method 4가지</h2><span class="pts">10점</span></div>
+    <div class="essay-grid">
+      <div><span class="lbl">지금 내 답안</span><div class="answer-box">-GET: 조회 요청, POST: 생성 요청, PUT: 수정 요청, DELETE: 삭제 요청</div></div>
+      <div><span class="lbl">보완할 점</span><div class="answer-box">메서드와 CRUD 대응은 맞습니다. 각 메서드가 무엇을 대상으로 하는지(목록인지 단건인지), 요청 본문이 필요한지, 성공 시 상태 코드가 무엇인지까지 쓰면 “목적”을 설명했다고 볼 수 있습니다. 첫 줄의 “-GET” 은 “- GET” 으로 띄어 써야 목록으로 보입니다.</div></div>
+    </div>
+    <div class="scroll-x"><table class="method-table">
+      <thead><tr><th>Method</th><th>CRUD</th><th>목적</th><th>이 프로젝트 예시</th><th>성공 응답</th></tr></thead>
+      <tbody>
+        <tr><td><span class="method m-GET">GET</span></td><td>Read</td><td>서버 데이터를 바꾸지 않고 리소스를 조회</td><td><code>GET /api/v1/books/</code> 목록<br><code>GET /api/v1/books/1/</code> 상세</td><td><span class="chip ok">200 OK</span></td></tr>
+        <tr><td><span class="method m-POST">POST</span></td><td>Create</td><td>요청 본문의 데이터로 새 리소스를 생성</td><td><code>POST /api/v1/books/</code></td><td><span class="chip ok">201 Created</span></td></tr>
+        <tr><td><span class="method m-PUT">PUT</span></td><td>Update</td><td>기존 리소스를 요청 본문으로 수정 (원칙은 전체 교체, DRF는 <code>partial=True</code>로 부분 수정)</td><td><code>PUT /api/v1/books/2/</code></td><td><span class="chip ok">200 OK</span></td></tr>
+        <tr><td><span class="method m-DELETE">DELETE</span></td><td>Delete</td><td>지정한 리소스를 삭제</td><td><code>DELETE /api/v1/books/5/</code></td><td><span class="chip ok">204 No Content</span></td></tr>
+      </tbody>
+    </table></div>
+    <details class="step"><summary>모범 답안 펼치기</summary><div class="inner">
+      <div class="answer-box">- GET : 리소스를 조회(Read)할 때 사용한다. 서버의 데이터를 변경하지 않으며, 목록 조회(GET /books/)와 단건 상세 조회(GET /books/1/)에 쓰인다. 성공 시 200 OK.
+- POST : 새 리소스를 생성(Create)할 때 사용한다. 요청 본문(body)에 담긴 데이터를 serializer로 검증한 뒤 저장하며, 성공 시 201 Created로 생성된 데이터를 응답한다.
+- PUT : 기존 리소스를 수정(Update)할 때 사용한다. URL로 대상을 지정하고 본문의 데이터로 수정하며, 원칙적으로 전체 필드를 교체한다. DRF에서는 partial=True 옵션으로 일부 필드만 수정할 수 있다. 성공 시 200 OK.
+- DELETE : 지정한 리소스를 삭제(Delete)할 때 사용한다. 성공 시 응답 본문 없이 204 No Content를 반환한다.</div>
+    </div></details>
+    <label for="essay10" class="eyebrow">직접 다시 써 보기 (이 브라우저에만 저장)</label>
+    <textarea id="essay10" placeholder="모범 답안을 보지 않고 다시 작성해 보세요."></textarea>
+  </div>
+
+  <div class="panel">
+    <div class="card-title"><span class="no">11</span><h2>Serializer의 many=True 옵션</h2><span class="pts">10점</span></div>
+    <div class="essay-grid">
+      <div><span class="lbl">지금 내 답안</span><div class="answer-box">- 단일 대상이 아닌 다량의 것을 받을 때 사용한다.</div></div>
+      <div><span class="lbl">보완할 점</span><div class="answer-box">“다량의 것”이 무엇인지 구체적으로 써야 합니다. 직렬화 대상이 QuerySet이나 리스트처럼 여러 객체라는 점, 내부적으로 ListSerializer가 각 객체를 같은 규칙으로 변환해 리스트로 돌려준다는 점, 쓰지 않으면 오류가 난다는 점을 예시와 함께 적어 주세요.</div></div>
+    </div>
+    <pre class="code"><span class="ln"><span class="mk"> </span><span class="cm"># 1) 목록 조회: QuerySet(여러 객체) → JSON 배열</span></span><span class="ln"><span class="mk"> </span>books = get_list_or_404(Book)</span><span class="ln"><span class="mk"> </span>serializer = BookListSerializer(books, many=True)</span><span class="ln"><span class="mk"> </span></span><span class="ln"><span class="mk"> </span><span class="cm"># 2) 역참조 중첩: 도서 1개에 달린 댓글 여러 개</span></span><span class="ln"><span class="mk"> </span>comment_set = CommentDetailSerializer(many=True, read_only=True)</span></pre>
+    <details class="step"><summary>모범 답안 펼치기</summary><div class="inner">
+      <div class="answer-box">- many=True는 직렬화(또는 역직렬화)할 대상이 단일 객체가 아니라 QuerySet이나 리스트처럼 여러 개의 객체일 때 사용한다.
+- 이 옵션을 주면 DRF가 내부적으로 ListSerializer를 만들어 각 객체를 같은 serializer 규칙으로 하나씩 변환하고, 결과를 JSON 배열(리스트)로 반환한다.
+- 예) 도서 목록 조회: BookListSerializer(books, many=True)
+- 예) 1:N 역참조 중첩 필드: 도서 상세에 댓글 목록을 넣을 때 comment_set = CommentSerializer(many=True, read_only=True)
+- 여러 객체를 넘기면서 many=True를 빠뜨리면, serializer가 QuerySet/리스트 자체를 하나의 객체로 보고 필드를 찾다가 AttributeError가 발생한다.</div>
+    </div></details>
+    <label for="essay11" class="eyebrow">직접 다시 써 보기 (이 브라우저에만 저장)</label>
+    <textarea id="essay11" placeholder="모범 답안을 보지 않고 다시 작성해 보세요."></textarea>
+  </div>
+</section>
+
+<!-- ============ QUIZ ============ -->
+<section class="view" id="v-quiz" hidden>
+  <div class="section-head">
+    <span class="eyebrow">재시험 대비 · 변형 문제</span>
+    <h1>같은 개념, 다른 버그</h1>
+    <p class="lede">재시험은 같은 프로젝트 구조에서 버그 위치만 바꿔 나올 가능성이 큽니다. 시험 범위(views · serializers)에서 자주 나오는 변형을 골랐습니다. 증상과 코드를 보고 고칠 곳을 고르세요.</p>
+  </div>
+  <div class="panel">
+    <div class="quiz-bar"><b id="qpos">1 / 14</b><div class="progress"><i id="qbar"></i></div><span id="qscore" class="chip neutral">정답 0</span></div>
+    <div class="q" id="qbox"></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn" id="qprev">이전</button>
+      <button class="btn primary" id="qnext">다음 문제</button>
+      <button class="btn" id="qreset">처음부터 다시</button>
+    </div>
+  </div>
+</section>
+
+<!-- ============ ERRORS ============ -->
+<section class="view" id="v-errors" hidden>
+  <div class="section-head">
+    <span class="eyebrow">에러 사전</span>
+    <h1>응답·에러 메시지로 고칠 곳 찾기</h1>
+    <p class="lede">Postman 응답이나 runserver 터미널에 뜬 문구로 검색하세요. 왼쪽은 보이는 증상, 오른쪽은 원인과 고칠 위치입니다.</p>
+  </div>
+  <label for="esearch" class="eyebrow">검색</label>
+  <input class="search" id="esearch" type="search" placeholder="예: 405, required, AttributeError, is_valid">
+  <div class="err-list" id="elist"></div>
+</section>
+
+<!-- ============ CHECKLIST ============ -->
+<section class="view" id="v-checklist" hidden>
+  <div class="section-head">
+    <span class="eyebrow">제출 직전 5분</span>
+    <h1>제출 체크리스트</h1>
+    <p class="lede">PDF의 시험·제출 유의 사항을 실행 순서대로 정리했습니다. 체크 상태는 이 브라우저에만 저장됩니다.</p>
+  </div>
+  <div class="panel">
+    <div class="check" id="clist"></div>
+    <div><button class="btn" id="creset">체크 모두 해제</button></div>
+  </div>
+</section>
+
+</div></main>
+
+<script>
+(function () {
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem('bdl:' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+    set(k, v) { try { localStorage.setItem('bdl:' + k, JSON.stringify(v)); } catch (e) {} }
+  };
+  const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+  // ---------- code renderer: lines starting with "-", "+", or " " ----------
+  function codeBlock(src) {
+    const lines = src.replace(/^\n/, '').replace(/\n\s*$/, '').split('\n');
+    return '<pre class="code">' + lines.map(l => {
+      const m = l[0], body = l.slice(1);
+      const cls = m === '+' ? 'add' : m === '-' ? 'del' : '';
+      let h = esc(body);
+      h = h.replace(/(#.*)$/, '<span class="cm">$1</span>');
+      return `<span class="ln ${cls}"><span class="mk">${m === ' ' ? '' : m}</span>${h}</span>`;
+    }).join('') + '</pre>';
+  }
+
+  // ---------- problems ----------
+  const P = [
+    { no: '01', title: '도서 목록 조회 응답 필드', pts: 15, method: 'GET', url: '/api/v1/books/', file: 'books/serializers.py', mine: true,
+      bad: ['200 OK', '각 도서의 모든 필드(content, finished, created_at …)가 응답됨'],
+      good: ['200 OK', 'id, title, author, num_of_comments 4개만 응답'],
+      buggy: `
+ class BookListSerializer(serializers.ModelSerializer):
+     num_of_comments = serializers.SerializerMethodField()
+
+     class Meta:
+         model = Book
+         fields = '__all__'`,
+      hint: '목록용 serializer가 “어떤 필드를 내보낼지” 정하는 곳은 한 군데뿐입니다. Meta를 보세요.',
+      fix: `
+ class BookListSerializer(serializers.ModelSerializer):
+     num_of_comments = serializers.SerializerMethodField()
+
+     class Meta:
+         model = Book
+-        fields = '__all__'
++        # 목록 조회에는 id, title, author, num_of_comments만 응답하도록 필드를 지정
++        fields = ('id', 'title', 'author', 'num_of_comments')`,
+      why: [
+        "<code>fields = '__all__'</code>은 모델의 모든 필드에 직접 선언한 필드(<code>num_of_comments</code>)까지 더해서 내보냅니다.",
+        '직접 선언한 필드는 <code>fields</code>에 반드시 넣어야 합니다. 빠뜨리면 요청 시 <code>AssertionError: The field \'num_of_comments\' was declared on serializer ...</code>로 500이 납니다.',
+        '응답 JSON의 키 순서는 <code>fields</code>에 적은 순서를 따릅니다. 정상 동작 화면과 순서를 맞춰 두면 채점에서 헷갈릴 일이 없습니다.'
+      ],
+      variants: [
+        "<code>fields = ('title')</code>처럼 원소가 하나인데 콤마가 없으면 문자열이 되어 <code>TypeError: The `fields` option must be a list or tuple</code>가 납니다. <code>('title',)</code>로 씁니다.",
+        "<code>exclude = ('content', 'finished', 'created_at', 'updated_at')</code>도 같은 결과를 내지만, <code>fields</code>와 <code>exclude</code>를 동시에 쓰면 오류입니다."
+      ] },
+
+    { no: '02', title: '도서 생성 응답 상태 코드', pts: 10, method: 'POST', url: '/api/v1/books/', file: 'books/views.py', mine: true,
+      bad: ['200 OK', '도서는 생성되지만 상태 코드가 200'],
+      good: ['201 Created', '생성된 도서 정보와 함께 201'],
+      buggy: `
+     elif request.method == 'POST':
+         serializer = BookSerializer(data=request.data)
+         if serializer.is_valid():
+             serializer.save()
+             return Response(serializer.data)
+         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)`,
+      hint: '<code>Response</code>에 상태 코드를 주지 않으면 기본값이 무엇일까요?',
+      fix: `
+     elif request.method == 'POST':
+         serializer = BookSerializer(data=request.data)
+         if serializer.is_valid():
+             serializer.save()
+-            return Response(serializer.data)
++            # 생성에 성공하면 201 Created 상태 코드로 응답
++            return Response(serializer.data, status=status.HTTP_201_CREATED)
+         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)`,
+      why: [
+        '<code>Response(data)</code>의 기본 상태 코드는 200입니다. 생성 성공은 관례상 201 Created입니다.',
+        '<code>status</code>는 <code>from rest_framework import status</code>로 가져온 모듈입니다. 숫자 <code>201</code>을 직접 써도 동작하지만 상수를 쓰는 편이 의도가 분명합니다.'
+      ],
+      variants: [
+        '<code>status.HTTP_201_CREATE</code>처럼 상수 이름이 틀리면 <code>AttributeError</code>가 나서 500이 됩니다.',
+        "<code>if serializer.is_valid(raise_exception=True):</code> 형태로 나오면 검증 실패 시 자동으로 400이 나가므로 아래의 400 줄은 실행되지 않습니다."
+      ] },
+
+    { no: '03', title: '댓글 생성 유효성 검사', pts: 10, method: 'POST', url: '/api/v1/books/<int:book_pk>/comments/', file: 'books/serializers.py', mine: false,
+      bad: ['400 Bad Request', '{"book": ["This field is required."]}'],
+      good: ['201 Created', 'content만 보내도 생성, 응답에는 book 포함'],
+      buggy: `
+ class CommentSerializer(serializers.ModelSerializer):
+     class Meta:
+         model = Comment
+         fields = '__all__'`,
+      hint: '<code>book</code>은 요청 본문이 아니라 URL로 정해지고, views에서 <code>serializer.save(book=book)</code>로 넣어 줍니다. 그렇다면 검증 단계에서 <code>book</code>을 어떻게 다뤄야 할까요? 응답에는 남아 있어야 합니다.',
+      fix: `
+ class CommentSerializer(serializers.ModelSerializer):
+     class Meta:
+         model = Comment
+         fields = '__all__'
++        # book은 URL의 book_pk로 views에서 save(book=book)로 넣어 주므로
++        # 입력 검증에서는 제외하고 응답에만 포함되도록 읽기 전용으로 지정
++        read_only_fields = ('book',)`,
+      why: [
+        '<code>is_valid()</code>는 요청 본문만 검사합니다. <code>book</code> FK는 필수 필드라 본문에 없으면 400이 납니다.',
+        '<code>read_only_fields</code>에 넣으면 검증 대상에서 빠지고 출력에는 그대로 남습니다. 저장할 때 필요한 값은 views의 <code>serializer.save(book=book)</code>이 채워 줍니다.',
+        "<code>exclude = ('book',)</code>나 <code>fields</code>에서 <code>book</code>을 빼는 풀이는 400은 없애지만 응답에서 book이 사라져 “응답에 book 정보 포함” 조건을 어깁니다."
+      ],
+      variants: [
+        'views에서 <code>serializer.save()</code>로만 저장하면 <code>IntegrityError: NOT NULL constraint failed: books_comment.book_id</code>가 납니다. 이때는 views를 고쳐 <code>save(book=book)</code>로 넘깁니다.',
+        '이 설정은 09번 댓글 수정에도 적용됩니다. PUT 본문에 <code>"book": 1</code>이 있어도 무시되고 원래 도서가 유지되는 것이 정상입니다.'
+      ] },
+
+    { no: '04', title: '도서 일부 필드 수정', pts: 10, method: 'PUT', url: '/api/v1/books/<int:book_pk>/', file: 'books/views.py', mine: false,
+      bad: ['400 Bad Request', 'title만 보냈더니 author, content가 필수라고 응답'],
+      good: ['200 OK', '보낸 필드만 수정'],
+      buggy: `
+     elif request.method == 'PUT':
+         serializer = BookSerializer(book, data=request.data)
+         if serializer.is_valid():
+             serializer.save()
+             return Response(serializer.data, status=status.HTTP_200_OK)`,
+      hint: '수정 파일이 <code>views.py</code>로 정해져 있습니다. Serializer를 만들 때 넘길 수 있는 인자 중 “일부만”을 뜻하는 것이 있습니다.',
+      fix: `
+     elif request.method == 'PUT':
+-        serializer = BookSerializer(book, data=request.data)
++        # partial=True: 요청에 담긴 필드만 검증하고 수정하는 부분 수정
++        serializer = BookSerializer(book, data=request.data, partial=True)
+         if serializer.is_valid():
+             serializer.save()
+             return Response(serializer.data, status=status.HTTP_200_OK)`,
+      why: [
+        'PUT은 원칙적으로 전체 교체라서 serializer가 모든 필수 필드를 검사합니다.',
+        '<code>partial=True</code>를 주면 본문에 없는 필드는 검증을 건너뛰고 기존 값을 유지합니다.',
+        '첫 번째 인자 <code>book</code>(instance)이 있어야 <code>save()</code>가 update로 동작합니다.'
+      ],
+      variants: [
+        '<code>BookSerializer(data=request.data, partial=True)</code>처럼 instance를 빠뜨리면 수정이 아니라 새 도서가 생성됩니다. 응답 id가 새 번호로 나오는 것이 단서입니다.',
+        'serializers.py에서 <code>extra_kwargs</code>나 <code>required=False</code>로 고쳐도 동작은 하지만, 지정 파일이 views.py이므로 오답 처리됩니다.'
+      ] },
+
+    { no: '05', title: '도서 삭제 응답 상태 코드', pts: 10, method: 'DELETE', url: '/api/v1/books/<int:book_pk>/', file: 'books/views.py', mine: true,
+      bad: ['200 OK', '삭제는 되지만 상태 코드가 200'],
+      good: ['204 No Content', '본문 없이 204'],
+      buggy: `
+     elif request.method == 'DELETE':
+         book.delete()
+         return Response(status=status.HTTP_200_OK)`,
+      hint: '삭제 성공 후에는 돌려줄 본문이 없습니다. 그 상황에 맞는 2xx 코드가 따로 있습니다.',
+      fix: `
+     elif request.method == 'DELETE':
+         book.delete()
+-        return Response(status=status.HTTP_200_OK)
++        # 삭제에 성공하면 응답 본문 없이 204 No Content로 응답
++        return Response(status=status.HTTP_204_NO_CONTENT)`,
+      why: [
+        '204 No Content는 “성공했고 돌려줄 본문은 없다”는 뜻이라 삭제 응답에 씁니다.',
+        '원래 버그 줄은 시험지에 나오지 않아 재구성한 것입니다. <code>return Response()</code>였더라도 기본값이 200이라 증상은 같습니다.'
+      ],
+      variants: [
+        '같은 pk로 두 번 삭제하면 두 번째는 <code>get_object_or_404</code>에서 404가 납니다. 테스트할 때는 남아 있는 pk를 쓰세요.',
+        '<code>Book</code>을 지우면 <code>on_delete=CASCADE</code> 때문에 그 도서의 댓글도 함께 지워집니다.'
+      ] },
+
+    { no: '06', title: '도서 상세 조회 댓글 목록 누락', pts: 10, method: 'GET', url: '/api/v1/books/<int:book_pk>/', file: 'books/serializers.py', mine: false,
+      bad: ['200 OK', '오류는 없지만 응답에 댓글 목록이 없음'],
+      good: ['200 OK', 'comment_set: [{id, content}, …] 포함'],
+      buggy: `
+ class BookDetailSerializer(serializers.ModelSerializer):
+     class CommentDetailSerializer(serializers.ModelSerializer):
+         class Meta:
+             model = Comment
+             fields = '__all__'
+
+     comments = CommentDetailSerializer(many=True, read_only=True)
+
+     class Meta:
+         model = Book
+         fields = '__all__'`,
+      hint: 'README에 “Comment의 book 필드에는 related_name이 지정되어 있지 않다”고 적혀 있습니다. 그러면 Book에서 댓글로 가는 역참조 이름은 무엇일까요? 중첩 댓글에 필요한 필드도 확인하세요.',
+      fix: `
+ class BookDetailSerializer(serializers.ModelSerializer):
+     class CommentDetailSerializer(serializers.ModelSerializer):
+         class Meta:
+             model = Comment
+-            fields = '__all__'
++            # 상세 조회에 포함할 댓글 정보는 id, content만 지정
++            fields = ('id', 'content')
+
+-    comments = CommentDetailSerializer(many=True, read_only=True)
++    # related_name이 없으므로 역참조 이름은 comment_set
++    # 필드 이름을 comment_set으로 맞춰야 해당 도서의 댓글 목록을 가져온다
++    comment_set = CommentDetailSerializer(many=True, read_only=True)
+
+     class Meta:
+         model = Book
+         fields = '__all__'`,
+      why: [
+        'serializer 필드 이름은 곧 인스턴스에서 꺼낼 속성 이름입니다. <code>related_name</code>이 없으면 Book에서 댓글로 가는 이름은 <code>comment_set</code>입니다.',
+        '<b>오류 없이 조용히 빠진 이유:</b> Book에는 <code>comments</code> 속성이 없습니다. <code>read_only=True</code> 필드는 필수가 아니라서 DRF가 값을 찾지 못하면 오류 대신 그 필드를 건너뜁니다(SkipField).',
+        "<code>comments = ...(source='comment_set')</code>로 고치면 댓글은 나오지만 응답 키가 <code>comments</code>가 되어 “comment_set 필드” 조건을 어깁니다."
+      ],
+      variants: [
+        "모델에 <code>related_name='comments'</code>가 있다면 반대로 <code>comments</code>가 정답이고 <code>comment_set</code>은 존재하지 않습니다.",
+        '<code>many=True</code>를 빠뜨리면 RelatedManager 자체를 댓글 한 개로 보고 <code>content</code>를 찾다가 AttributeError가 납니다.',
+        '<code>read_only=True</code>를 빠뜨려도 GET은 되지만, 같은 serializer로 생성·수정하면 comment_set이 필수 입력이 됩니다.'
+      ] },
+
+    { no: '07', title: '도서 목록 댓글 개수', pts: 5, method: 'GET', url: '/api/v1/books/', file: 'books/serializers.py', mine: false,
+      bad: ['200 OK', 'num_of_comments가 모든 도서에서 전체 댓글 수(6)'],
+      good: ['200 OK', '도서별 댓글 개수 (3, 1, 2, 0, 0)'],
+      buggy: `
+     def get_num_of_comments(self, obj):
+         return Comment.objects.count()`,
+      hint: '<code>obj</code>는 지금 직렬화 중인 도서 한 권입니다. 계산에 <code>obj</code>가 쓰이고 있나요?',
+      fix: `
+     def get_num_of_comments(self, obj):
+-        return Comment.objects.count()
++        # obj(현재 직렬화 중인 도서)에 달린 댓글만 역참조로 세어 반환
++        return obj.comment_set.count()`,
+      why: [
+        '<code>Comment.objects.count()</code>는 댓글 테이블 전체를 셉니다. 도서와 상관없이 항상 같은 값이 나옵니다.',
+        '<code>SerializerMethodField</code>는 <code>get_&lt;필드명&gt;(self, obj)</code> 메서드를 부르고, <code>obj</code>에 지금 직렬화 중인 객체를 넘깁니다.',
+        '<code>Comment.objects.filter(book=obj).count()</code>도 같은 결과입니다.'
+      ],
+      variants: [
+        '메서드 이름을 <code>get_comments_count</code>처럼 필드명과 다르게 쓰면 AttributeError가 납니다. 이름 규칙은 <code>get_</code> + 필드명입니다.',
+        '<code>obj.comment_set</code>만 반환하면 숫자가 아니라 매니저 객체라서 <code>TypeError: Object of type RelatedManager is not JSON serializable</code>가 납니다. <code>.count()</code>까지 호출해야 합니다.'
+      ] },
+
+    { no: '08', title: '댓글 삭제 요청 405', pts: 5, method: 'DELETE', url: '/api/v1/comments/<int:comment_pk>/', file: 'books/views.py', mine: true,
+      bad: ['405 Method Not Allowed', '{"detail": "Method \\"DELETE\\" not allowed."}'],
+      good: ['204 No Content', '댓글 삭제 후 204'],
+      buggy: `
+ @api_view(['GET', 'PUT'])
+ def comment_detail(request, comment_pk):
+     comment = get_object_or_404(Comment, pk=comment_pk)`,
+      hint: '404가 아니라 405입니다. URL은 찾았는데 메서드를 거절했다는 뜻이니, 허용 메서드를 정하는 곳을 보세요.',
+      fix: `
+-@api_view(['GET', 'PUT'])
++# 댓글 단건 조회·수정에 더해 삭제(DELETE) 요청도 허용
++@api_view(['GET', 'PUT', 'DELETE'])
+ def comment_detail(request, comment_pk):
+     comment = get_object_or_404(Comment, pk=comment_pk)`,
+      why: [
+        '<code>@api_view</code>에 적힌 메서드만 뷰 함수로 들어옵니다. 목록에 없으면 함수 본문이 실행되기 전에 405로 끝납니다.',
+        '404는 URL이나 객체가 없을 때, 405는 URL은 맞는데 메서드가 허용되지 않을 때입니다.'
+      ],
+      variants: [
+        '데코레이터는 고쳤는데 DELETE 분기의 반환 상태가 200이면 05번과 같은 문제가 하나 더 숨어 있는 것입니다. 두 곳을 함께 확인하세요.',
+        '<code>@api_view</code> 자체가 빠지면 <code>.accepted_renderer not set on Response</code> AssertionError로 500이 납니다.'
+      ] },
+
+    { no: '09', title: '댓글 수정 내용 미반영', pts: 5, method: 'PUT', url: '/api/v1/comments/<int:comment_pk>/', file: 'books/views.py', mine: true,
+      bad: ['200 OK', '응답에 수정 전 내용, 재조회해도 그대로'],
+      good: ['200 OK', '수정된 내용 저장 후 응답'],
+      buggy: `
+     elif request.method == 'PUT':
+         serializer = CommentSerializer(comment, data=request.data)
+         if serializer.is_valid():
+             return Response(serializer.data, status=status.HTTP_200_OK)
+         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)`,
+      hint: '검증은 통과했는데 DB가 그대로입니다. 검증과 저장은 별개의 호출입니다.',
+      fix: `
+     elif request.method == 'PUT':
+         serializer = CommentSerializer(comment, data=request.data)
+         if serializer.is_valid():
++            # 검증된 데이터를 DB에 저장(instance가 있으므로 update 수행)
++            serializer.save()
+             return Response(serializer.data, status=status.HTTP_200_OK)
+         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)`,
+      why: [
+        '<code>is_valid()</code>는 검사만 하고 DB에는 아무것도 쓰지 않습니다.',
+        '<code>save()</code>는 instance가 있으면 <code>update()</code>, 없으면 <code>create()</code>를 부릅니다.',
+        '<code>save()</code> 전의 <code>serializer.data</code>는 원래 instance를 직렬화한 값이라 수정 전 내용이 응답됩니다.'
+      ],
+      variants: [
+        '<code>save()</code>를 <code>is_valid()</code>보다 먼저 부르면 <code>AssertionError: You must call `.is_valid()` before calling `.save()`</code>가 납니다.',
+        "응답의 <code>updated_at</code>이 바뀌었는지 보면 저장 여부를 바로 확인할 수 있습니다."
+      ] }
+  ];
+
+  const methodCls = m => 'method m-' + m;
+  const statusChip = (s) => {
+    const code = parseInt(s, 10);
+    const c = code >= 400 ? 'err' : 'ok';
+    return `<span class="chip ${c}">${esc(s)}</span>`;
+  };
+
+  // score table
+  const tb = document.querySelector('#score-table tbody');
+  tb.innerHTML = P.map(p => `<tr>
+      <td><a href="#p${p.no}" class="mono">${p.no}</a></td>
+      <td><span class="${methodCls(p.method)}">${p.method}</span> ${esc(p.title)}</td>
+      <td class="mono" style="font-size:.82rem">${p.file.replace('books/', '')}</td>
+      <td class="num">${p.pts}</td>
+      <td>${p.mine ? '<span class="chip ok">동작함</span>' : '<span class="chip err">미해결</span>'}</td>
+    </tr>`).join('') + `<tr><td></td><td><b>서술형 10 · 11</b></td><td class="mono" style="font-size:.82rem">problem_10_11.md</td><td class="num">20</td><td><span class="chip warn">보완 필요</span></td></tr>`;
+
+  // cards
+  const marks = store.get('marks', {});
+  const cardsEl = document.getElementById('cards');
+  cardsEl.innerHTML = P.map(p => `
+    <article class="card" id="card-${p.no}">
+      <div class="card-head">
+        <div class="card-title"><span class="no">${p.no}</span><h2>${esc(p.title)}</h2><span class="pts">${p.pts}점</span></div>
+        <div class="reqline"><span class="${methodCls(p.method)}">${p.method}</span><span class="url">${esc(p.url)}</span><span class="file">수정 파일 · ${p.file}</span></div>
+      </div>
+      <div class="card-body">
+        <div class="compare">
+          <div class="bad"><span class="lbl">현재 증상</span>${statusChip(p.bad[0])}<span>${esc(p.bad[1])}</span></div>
+          <div class="good"><span class="lbl">정상 동작</span>${statusChip(p.good[0])}<span>${esc(p.good[1])}</span></div>
+        </div>
+        <div class="mine">내 스켈레톤: ${p.mine ? '<span class="chip ok">이미 고쳐져 동작함</span> 고친 줄에 설명 주석이 있는지 확인하세요.' : '<span class="chip err">아직 버그 그대로</span>'}</div>
+        <div>
+          <span class="eyebrow">버그가 든 코드 · ${p.file}</span>
+          ${codeBlock(p.buggy)}
+        </div>
+        <details class="step"><summary>1단계 · 힌트</summary><div class="inner"><p>${p.hint}</p></div></details>
+        <details class="step"><summary>2단계 · 정답 diff (주석 포함)</summary><div class="inner">${codeBlock(p.fix)}</div></details>
+        <details class="step"><summary>3단계 · 왜 이렇게 고치나</summary><div class="inner"><ul class="clean why">${p.why.map(w => `<li>${w}</li>`).join('')}</ul></div></details>
+        <details class="step"><summary>재시험 변형 포인트</summary><div class="inner"><ul class="clean variants">${p.variants.map(w => `<li>${w}</li>`).join('')}</ul></div></details>
+        <div class="selfmark"><span>혼자 풀어 보니</span>
+          <button class="btn" data-mark="${p.no}" data-v="ok">맞혔다</button>
+          <button class="btn" data-mark="${p.no}" data-v="err">다시 볼 문제</button>
+        </div>
+      </div>
+    </article>`).join('');
+
+  const pnav = document.getElementById('pnav');
+  function renderMarks() {
+    document.querySelectorAll('[data-mark]').forEach(b => {
+      const v = marks[b.dataset.mark];
+      b.classList.toggle('sel-ok', v === 'ok' && b.dataset.v === 'ok');
+      b.classList.toggle('sel-err', v === 'err' && b.dataset.v === 'err');
+    });
+    pnav.innerHTML = P.map(p => `<button data-go="${p.no}"><span class="dot ${marks[p.no] || ''}"></span>${p.no}</button>`).join('');
+    const done = P.filter(p => marks[p.no] === 'ok').length;
+    document.getElementById('ov-self').textContent = done + ' / 9';
+  }
+  cardsEl.addEventListener('click', e => {
+    const b = e.target.closest('[data-mark]'); if (!b) return;
+    const k = b.dataset.mark;
+    marks[k] = marks[k] === b.dataset.v ? undefined : b.dataset.v;
+    store.set('marks', marks); renderMarks();
+  });
+  pnav.addEventListener('click', e => {
+    const b = e.target.closest('[data-go]'); if (!b) return;
+    location.hash = 'p' + b.dataset.go;
+  });
+  renderMarks();
+
+  // ---------- quiz ----------
+  const Q = [
+    { ask: '도서 목록 GET이 500 에러를 냅니다. 터미널: <code>AttributeError: Got AttributeError when attempting to get a value for field `title` on serializer `BookListSerializer`. ... \'list\' object has no attribute \'title\'</code>',
+      code: ` books = get_list_or_404(Book)\n serializer = BookListSerializer(books)\n return Response(serializer.data)`,
+      choices: ['BookListSerializer의 fields에 title 추가', 'BookListSerializer(books, many=True)로 변경', 'get_list_or_404를 Book.objects.all()로 변경', '@api_view에 GET 추가'], a: 1,
+      ex: '여러 객체(리스트/QuerySet)를 넘기면서 <code>many=True</code>가 없으면 리스트 자체를 도서 한 권으로 보고 <code>title</code>을 찾다가 실패합니다. 서술형 11번과 직결되는 개념입니다.' },
+    { ask: '댓글 생성 시 content만 보냈는데 500 에러: <code>IntegrityError: NOT NULL constraint failed: books_comment.book_id</code>. serializer에는 이미 <code>read_only_fields = (\'book\',)</code>가 있습니다.',
+      code: ` book = get_object_or_404(Book, pk=book_pk)\n serializer = CommentSerializer(data=request.data)\n if serializer.is_valid():\n     serializer.save()`,
+      choices: ["read_only_fields에서 book 제거", 'serializer.save(book=book)으로 변경', 'CommentSerializer(book, data=request.data)로 변경', 'models.py에서 book에 null=True 추가'], a: 1,
+      ex: '검증에서 book을 뺐다면 저장할 때 직접 넣어 줘야 합니다. <code>save(book=book)</code>의 키워드 인자는 validated_data에 합쳐져 저장됩니다. models.py 수정은 금지입니다.' },
+    { ask: '도서 수정 PUT을 보냈더니 200이 오는데, 응답 id가 7번(새 번호)이고 원래 도서는 그대로입니다.',
+      code: ` book = get_object_or_404(Book, pk=book_pk)\n ...\n serializer = BookSerializer(data=request.data, partial=True)`,
+      choices: ['partial=True 제거', 'BookSerializer(book, data=request.data, partial=True)로 변경', 'serializer.save(pk=book_pk)로 변경', '@api_view에 PATCH 추가'], a: 1,
+      ex: 'instance 없이 data만 주면 <code>save()</code>가 <code>create()</code>를 부릅니다. 수정하려면 첫 번째 인자로 기존 객체를 넘겨야 <code>update()</code>가 호출됩니다.' },
+    { ask: 'runserver는 켜지는데 도서 목록 GET이 500입니다. <code>AssertionError: The field \'num_of_comments\' was declared on serializer BookListSerializer, but has not been included in the \'fields\' option.</code>',
+      code: ` num_of_comments = serializers.SerializerMethodField()\n\n class Meta:\n     model = Book\n     fields = ('id', 'title', 'author')`,
+      choices: ['num_of_comments 선언을 삭제', "fields에 'num_of_comments' 추가", "fields = '__all__'로 변경", 'get_num_of_comments 메서드 삭제'], a: 1,
+      ex: '직접 선언한 필드는 <code>fields</code>에 반드시 포함해야 합니다. 1번 선택지는 서버는 켜지지만 응답에서 필드가 사라지고, 3번은 01번 문제를 다시 만듭니다.' },
+    { ask: '모델이 아래처럼 바뀐 변형 시험입니다. 상세 조회에 댓글 목록을 <code>comments</code> 키로 넣으려면?',
+      code: ` class Comment(models.Model):\n     book = models.ForeignKey(Book, on_delete=models.CASCADE, related_name='comments')`,
+      choices: ['comment_set = CommentSerializer(many=True, read_only=True)', 'comments = CommentSerializer(many=True, read_only=True)', "comments = CommentSerializer(source='comment_set', many=True)", 'comments = serializers.PrimaryKeyRelatedField()'], a: 1,
+      ex: '<code>related_name</code>을 지정하면 기본 이름 <code>comment_set</code>은 사라지고 지정한 이름으로만 역참조됩니다. 시험 전에 models.py에서 related_name부터 확인하세요.' },
+    { ask: '도서 목록 GET에서 500: <code>AttributeError: \'BookListSerializer\' object has no attribute \'get_num_of_comments\'</code>',
+      code: ` num_of_comments = serializers.SerializerMethodField()\n\n def get_comments_count(self, obj):\n     return obj.comment_set.count()`,
+      choices: ['메서드 이름을 get_num_of_comments로 변경', 'SerializerMethodField(read_only=True)로 변경', "fields에 'get_comments_count' 추가", 'obj.comment_set.all()로 변경'], a: 0,
+      ex: 'SerializerMethodField는 기본으로 <code>get_</code> + 필드명 메서드를 찾습니다. 다른 이름을 쓰려면 <code>SerializerMethodField(method_name=\'...\')</code>로 지정해야 합니다.' },
+    { ask: '어떤 요청이든 500: <code>AssertionError: Expected a `Response`, `HttpResponse` or `StreamingHttpResponse` to be returned from the view, but received a `&lt;class \'NoneType\'&gt;`</code>',
+      code: ` @api_view(['GET', 'POST'])\n def book_list(request):\n     if request.method == 'Get':\n         ...\n     elif request.method == 'POST':\n         ...`,
+      choices: ["'Get'을 'GET'으로 변경", "@api_view(['get', 'post'])로 변경", '함수 끝에 return Response() 추가', 'get_list_or_404를 get_object_or_404로 변경'], a: 0,
+      ex: '<code>request.method</code>는 대문자 문자열입니다. 비교가 하나도 맞지 않으면 함수가 끝까지 내려가 <code>None</code>을 반환합니다. 3번은 증상만 가립니다.' },
+    { ask: '모든 API가 500: <code>AssertionError: .accepted_renderer not set on Response</code>',
+      code: ` def comment_list(request):\n     comments = get_list_or_404(Comment)\n     serializer = CommentSerializer(comments, many=True)\n     return Response(serializer.data)`,
+      choices: ['from rest_framework.response import Response 추가', "@api_view(['GET']) 데코레이터 추가", 'Response 대신 JsonResponse 사용', 'many=True 제거'], a: 1,
+      ex: 'DRF의 <code>Response</code>는 <code>@api_view</code>(또는 APIView)가 렌더러를 설정해 줘야 JSON으로 바뀝니다. 데코레이터가 빠지면 이 오류가 납니다.' },
+    { ask: '댓글 수정 PUT에서 500: <code>AssertionError: You must call `.is_valid()` before calling `.save()`.</code>',
+      code: ` serializer = CommentSerializer(comment, data=request.data)\n serializer.save()\n if serializer.is_valid():\n     return Response(serializer.data)`,
+      choices: ['serializer.save()를 is_valid() 블록 안으로 옮김', 'serializer.save(commit=False)로 변경', 'data= 대신 instance=만 전달', 'is_valid(raise_exception=False)로 변경'], a: 0,
+      ex: '순서는 항상 <code>is_valid()</code> → <code>save()</code>입니다. 검증된 데이터(validated_data)가 있어야 저장할 수 있습니다.' },
+    { ask: '빈 <code>{}</code>으로 도서 생성 POST를 보냈습니다. 정상 코드라면 어떤 응답이 나와야 할까요?',
+      code: ` if serializer.is_valid():\n     serializer.save()\n     return Response(serializer.data, status=status.HTTP_201_CREATED)\n return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)`,
+      choices: ['201 Created, 빈 도서 생성', '400 Bad Request, title·author·content 필수 오류', '404 Not Found', '500 IntegrityError'], a: 1,
+      ex: '<code>is_valid()</code>가 실패하면 <code>serializer.errors</code>에 필드별 오류가 담기고 400으로 응답합니다. <code>finished</code>는 default가 있어 필수가 아닙니다.' },
+    { ask: '상세 조회 응답에서 댓글이 <code>"comment_set": [1, 2, 3]</code>처럼 id 숫자만 나옵니다. 문제 요구는 <code>[{id, content}, ...]</code>입니다. serializers.py 상황은?',
+      code: ` class BookDetailSerializer(serializers.ModelSerializer):\n     class Meta:\n         model = Book\n         fields = ('id', 'title', 'comment_set')`,
+      choices: ['fields에 content 추가', 'comment_set = CommentSerializer(many=True, read_only=True) 선언 추가', 'depth = 0 추가', "fields = '__all__'로 변경"], a: 1,
+      ex: '역참조 이름을 fields에 그냥 넣으면 DRF가 PrimaryKeyRelatedField로 처리해 pk만 보여 줍니다. 중첩 serializer를 선언해야 객체 형태로 나옵니다.' },
+    { ask: 'Postman에서 <code>POST http://127.0.0.1:8000/api/v1/books</code>(끝 / 없음)을 보냈더니 500: <code>RuntimeError: You called this URL via POST, but the URL doesn\'t end in a slash ...</code>',
+      code: ` path('books/', views.book_list),`,
+      choices: ['urls.py에서 path를 \'books\'로 변경', '요청 URL 끝에 / 를 붙여 다시 요청', 'settings.py에서 APPEND_SLASH = False', 'views.py에 csrf_exempt 추가'], a: 1,
+      ex: '시험 안내에 “요청 URL은 반드시 끝에 / 를 붙인다”고 적혀 있습니다. 코드 버그가 아니라 요청 실수이므로 URL을 고쳐 보냅니다. 지정 파일 외 수정은 오답입니다.' },
+    { ask: '댓글 생성 응답이 201인데 <code>book</code> 키가 응답에 없습니다. 요구사항은 “응답에 book 포함”입니다.',
+      code: ` class CommentSerializer(serializers.ModelSerializer):\n     class Meta:\n         model = Comment\n         exclude = ('book',)`,
+      choices: ["exclude를 지우고 fields = '__all__', read_only_fields = ('book',)", "fields = ('id', 'content')", 'book = serializers.CharField()', '그대로 두고 views에서 data에 book 추가'], a: 0,
+      ex: '<code>exclude</code>는 입력과 출력 모두에서 필드를 없앱니다. 입력에서만 빼려면 <code>read_only_fields</code>를 씁니다. 03번의 함정 풀이입니다.' },
+    { ask: '도서 목록 GET이 500: <code>TypeError: Object of type RelatedManager is not JSON serializable</code>',
+      code: ` def get_num_of_comments(self, obj):\n     return obj.comment_set`,
+      choices: ['return obj.comment_set.count()', 'return len(Comment.objects.all())', 'return obj.comment_set.all', 'return obj.comments.count()'], a: 0,
+      ex: '<code>obj.comment_set</code>은 RelatedManager 객체입니다. <code>.count()</code>로 해당 도서의 댓글 수를 세야 합니다. 4번은 related_name이 없어서 AttributeError입니다.' }
+  ];
+
+  let qi = store.get('qi', 0); if (qi >= Q.length) qi = 0;
+  let answers = store.get('qa', {});
+  const qbox = document.getElementById('qbox');
+  function renderQ() {
+    const q = Q[qi]; const picked = answers[qi];
+    qbox.innerHTML = `
+      <p class="ask"><b class="mono" style="color:var(--accent)">Q${qi + 1}.</b> ${q.ask}</p>
+      ${codeBlock(q.code.split('\n').map(l => l[0] === ' ' ? l : ' ' + l).join('\n'))}
+      <div class="choices">${q.choices.map((c, i) => {
+        let cls = '';
+        if (picked != null) { if (i === q.a) cls = 'right'; else if (i === picked) cls = 'wrong'; }
+        return `<button data-c="${i}" class="${cls}" ${picked != null ? 'disabled' : ''}><span class="k">${'ABCD'[i]}</span><span>${esc(c)}</span></button>`;
+      }).join('')}</div>
+      ${picked != null ? `<div class="explain"><b style="color:${picked === q.a ? 'var(--ok)' : 'var(--err)'}">${picked === q.a ? '정답입니다' : '정답은 ' + 'ABCD'[q.a] + '입니다'}</b><p>${q.ex}</p></div>` : ''}`;
+    const score = Object.keys(answers).filter(k => answers[k] === Q[k].a).length;
+    document.getElementById('qpos').textContent = `${qi + 1} / ${Q.length}`;
+    document.getElementById('qscore').textContent = `정답 ${score} / 푼 문제 ${Object.keys(answers).length}`;
+    document.getElementById('qbar').style.width = (Object.keys(answers).length / Q.length * 100) + '%';
+    document.getElementById('qprev').disabled = qi === 0;
+    document.getElementById('qnext').textContent = qi === Q.length - 1 ? '처음 문제로' : '다음 문제';
+  }
+  qbox.addEventListener('click', e => {
+    const b = e.target.closest('[data-c]'); if (!b || answers[qi] != null) return;
+    answers[qi] = +b.dataset.c; store.set('qa', answers); renderQ();
+  });
+  document.getElementById('qnext').onclick = () => { qi = (qi + 1) % Q.length; store.set('qi', qi); renderQ(); };
+  document.getElementById('qprev').onclick = () => { if (qi > 0) { qi--; store.set('qi', qi); renderQ(); } };
+  document.getElementById('qreset').onclick = () => { answers = {}; qi = 0; store.set('qa', answers); store.set('qi', 0); renderQ(); };
+  renderQ();
+
+  // ---------- error dictionary ----------
+  const E = [
+    ['405 Method Not Allowed', '{"detail": "Method \\"DELETE\\" not allowed."}', '<b>views.py @api_view</b> 목록에 해당 메서드가 없음. 메서드 추가. (문제 08)'],
+    ['400 Bad Request', '{"book": ["This field is required."]}', '<b>serializers.py</b> URL로 받는 FK가 입력 검증에 포함됨. <code>read_only_fields</code>로 지정하고 views에서 <code>save(book=book)</code>. (문제 03)'],
+    ['400 Bad Request (PUT)', '{"author": [...required], "content": [...required]}', '<b>views.py</b> 부분 수정인데 전체 검증 중. <code>partial=True</code>. (문제 04)'],
+    ['200 OK인데 201·204여야 함', '상태 코드만 다름', '<b>views.py Response(status=...)</b> 생성은 <code>HTTP_201_CREATED</code>, 삭제는 <code>HTTP_204_NO_CONTENT</code>. (문제 02, 05)'],
+    ['200 OK인데 내용이 그대로', '응답과 DB에 수정 전 값, updated_at도 그대로', '<b>views.py</b> <code>is_valid()</code> 뒤 <code>serializer.save()</code> 누락. (문제 09)'],
+    ['200 OK인데 필드가 너무 많음', 'content, created_at 등이 목록에 나옴', "<b>serializers.py Meta.fields</b> <code>'__all__'</code> 대신 필요한 필드만 튜플로. (문제 01)"],
+    ['200 OK인데 중첩 필드가 없음', '에러 없이 comment_set 키가 아예 없음', '<b>serializers.py</b> 필드 이름이 역참조 이름과 다름. related_name이 없으면 <code>comment_set</code>. (문제 06)'],
+    ['200 OK인데 개수가 모두 같음', 'num_of_comments가 전부 전체 댓글 수', '<b>serializers.py get_ 메서드</b> 전체 테이블 대신 <code>obj.comment_set.count()</code>. (문제 07)'],
+    ['404 Not Found', '{"detail": "No Book matches the given query."}', '해당 pk가 DB에 없음. 이미 삭제했거나 번호가 틀림. 코드가 아니라 요청 pk를 확인. 경로 자체가 없으면 Django 404 HTML 페이지가 뜸.'],
+    ["AttributeError ... 'list' object has no attribute", '여러 객체를 직렬화하는 곳', '<b>views.py</b> <code>many=True</code> 누락.'],
+    ["AttributeError: 'Book' object has no attribute 'comment_set'", '역참조 이름 불일치', '모델에 <code>related_name</code>이 있는지 확인하고 그 이름을 사용.'],
+    ["AttributeError ... has no attribute 'get_xxx'", 'SerializerMethodField', '메서드 이름을 <code>get_</code> + 필드명으로 맞춤.'],
+    ['AssertionError: The field ... was declared ... not been included in the \'fields\'', '서버는 켜지고 요청 시 500', '<b>serializers.py</b> 선언한 필드를 <code>fields</code>에 추가.'],
+    ['TypeError: The `fields` option must be a list or tuple', "fields = ('title')", '원소 하나짜리 튜플은 콤마 필수: <code>(\'title\',)</code>.'],
+    ['AssertionError: You must call `.is_valid()` before calling `.save()`', '호출 순서', '<code>is_valid()</code> 다음에 <code>save()</code>.'],
+    ['AssertionError: When a serializer is passed a `data` keyword argument you must call `.is_valid()`', '.data 접근 순서', '<code>data=</code>로 만든 serializer는 <code>is_valid()</code> 후에 <code>.data</code>를 읽음.'],
+    ['AssertionError: .accepted_renderer not set on Response', '모든 응답 500', '<b>views.py</b> <code>@api_view</code> 데코레이터 누락.'],
+    ['AssertionError: Expected a `Response` ... received a `<class \'NoneType\'>`', '뷰가 None 반환', 'method 비교 오타(<code>\'Get\'</code>)나 분기 누락. 모든 분기에서 Response를 반환하는지 확인.'],
+    ['IntegrityError: NOT NULL constraint failed: books_comment.book_id', '댓글 생성 시 500', '<b>views.py</b> <code>serializer.save(book=book)</code>로 FK를 넣어 줌.'],
+    ["RuntimeError: You called this URL via POST, but the URL doesn't end in a slash", 'URL 끝 / 누락', '코드 수정 없이 요청 URL 끝에 <code>/</code>를 붙임.'],
+    ['NameError: name \'status\' is not defined', 'import 누락', '<code>from rest_framework import status</code> 확인 (views.py 상단).'],
+    ['IndentationError / SyntaxError', 'runserver가 안 켜짐', '방금 고친 줄의 들여쓰기·괄호·콜론 확인. 서버가 안 뜨면 전체 감점이므로 제출 전 반드시 runserver.']
+  ];
+  const elist = document.getElementById('elist');
+  function renderE(qs) {
+    const t = (qs || '').toLowerCase().trim();
+    const rows = E.filter(r => !t || r.join(' ').toLowerCase().includes(t));
+    elist.innerHTML = rows.length ? rows.map(r => `<div class="err-row"><div><div class="sig">${esc(r[0])}</div><small style="color:var(--muted)">${esc(r[1])}</small></div><div class="fix">${r[2]}</div></div>`).join('')
+      : '<p class="lede">일치하는 항목이 없습니다. 상태 코드 숫자나 예외 이름(예: AttributeError)으로 다시 검색해 보세요.</p>';
+  }
+  document.getElementById('esearch').addEventListener('input', e => renderE(e.target.value));
+  renderE('');
+
+  // ---------- checklist ----------
+  const C = [
+    ['가상환경을 만들고 requirements.txt만 설치했다', '그 외 패키지 설치 불가'],
+    ['models.py, settings.py, urls.py는 건드리지 않았다', '문제에 지정된 views.py · serializers.py만 수정'],
+    ['함수명·파일명을 바꾸지 않았다', 'book_detail → detail 같은 변경 금지'],
+    ['고친 줄마다 무엇을 왜 바꿨는지 주석을 달았다', '주석이 없거나 미흡하면 감점'],
+    ['디버깅용 print()와 불필요한 출력을 지웠다', '정답과 무관한 출력 내용도 감점'],
+    ['Postman으로 9개 요청을 모두 다시 보냈다 (URL 끝에 /)', '한 문제 수정이 다른 문제를 깨뜨리지 않았는지 확인. 특히 03 ↔ 09'],
+    ['못 푼 문제는 주석 처리해 두었다', '서버 실행에 지장이 없게'],
+    ['python manage.py runserver가 에러 없이 켜진다', '채점 프로그램이 서버를 못 켜면 감점 또는 0점'],
+    ['problem_10_11.md의 [답안 작성] 아래에만 답을 썼다', '문제 문장과 --- 구분선은 그대로'],
+    ['venv/ 폴더를 빼고 압축했다', 'venv 포함 시 감점'],
+    ['압축 파일 이름이 지역0반_이름 형식이다', '예: 서울1반_홍길동'],
+    ['마감 직전이 아니라 여유 있게 제출했다', '마감 후 제출 불가']
+  ];
+  let checks = store.get('checks', {});
+  const clist = document.getElementById('clist');
+  clist.innerHTML = C.map((c, i) => `<label for="ck${i}"><input type="checkbox" id="ck${i}" data-i="${i}"><span class="t"><span>${esc(c[0])}</span><small>${esc(c[1])}</small></span></label>`).join('');
+  clist.querySelectorAll('input').forEach(inp => {
+    inp.checked = !!checks[inp.dataset.i];
+    inp.addEventListener('change', () => { checks[inp.dataset.i] = inp.checked; store.set('checks', checks); });
+  });
+  document.getElementById('creset').onclick = () => { checks = {}; store.set('checks', checks); clist.querySelectorAll('input').forEach(i => i.checked = false); };
+
+  // essays
+  ['essay10', 'essay11'].forEach(id => {
+    const ta = document.getElementById(id);
+    ta.value = store.get(id, '');
+    ta.addEventListener('input', () => store.set(id, ta.value));
+  });
+
+  // ---------- routing ----------
+  const views = ['overview', 'problems', 'essay', 'quiz', 'errors', 'checklist'];
+  function route() {
+    let h = (location.hash || '#overview').slice(1);
+    let target = null;
+    if (/^p\d\d$/.test(h)) { target = 'card-' + h.slice(1); h = 'problems'; }
+    if (!views.includes(h)) h = 'overview';
+    views.forEach(v => { document.getElementById('v-' + v).hidden = v !== h; });
+    document.querySelectorAll('#tabs a').forEach(a => {
+      if (a.getAttribute('href') === '#' + h) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
+    });
+    document.querySelectorAll('#pnav button').forEach(b => b.classList.toggle('on', target === 'card-' + b.dataset.go));
+    if (target) {
+      const el = document.getElementById(target);
+      if (el) { const y = el.getBoundingClientRect().top + window.scrollY - document.querySelector('.top').offsetHeight - 12; window.scrollTo({ top: y }); }
+    } else { window.scrollTo({ top: 0 }); }
+  }
+  window.addEventListener('hashchange', route);
+  route();
+})();
+</script>
