@@ -1,8 +1,9 @@
 """
 Booklog 디버깅 연습 문제 생성기
 
-skeleton/을 복사한 뒤 views.py와 serializers.py를 "정답 코드"로 되돌리고,
-그 위에 버그를 심어 연습용 프로젝트를 만듭니다. 원본 skeleton/은 수정하지 않습니다.
+exam/(없으면 skeleton/)을 복사한 뒤 views.py와 serializers.py를 "정답 코드"로 되돌리고,
+그 위에 버그를 심어 연습용 프로젝트를 만듭니다. 원본 폴더는 수정하지 않습니다.
+DB(db.sqlite3)는 fixtures로 새로 만들어 두므로 바로 runserver 할 수 있습니다.
 
 사용법 (레포 루트에서):
     python tools/make_practice.py                     # 시험과 같은 버그 9개 (기본: practice/)
@@ -267,8 +268,29 @@ BUGS = [
 
 
 def copy_project(src, dst):
-    ignore = shutil.ignore_patterns('venv', '.venv', '__pycache__', '*.pyc')
+    # DB와 시험용 README는 복사하지 않음 (DB는 아래에서 fixtures로 새로 생성)
+    ignore = shutil.ignore_patterns('venv', '.venv', '__pycache__', '*.pyc', 'db.sqlite3', 'README.md')
     shutil.copytree(src, dst, ignore=ignore)
+
+
+def default_src():
+    # 레포에 포함된 exam/을 기본으로 쓰고, 없으면 시험 원본 skeleton/을 사용
+    for name in ('exam', 'skeleton'):
+        path = os.path.join(ROOT, name)
+        if os.path.exists(os.path.join(path, 'manage.py')):
+            return path
+    return os.path.join(ROOT, 'exam')
+
+
+def build_db(project_dir):
+    import subprocess
+    for cmd in (['migrate', '-v', '0'], ['loaddata', 'books.json', 'comments.json', '-v', '0']):
+        r = subprocess.run([sys.executable, 'manage.py', *cmd], cwd=project_dir, capture_output=True, text=True)
+        if r.returncode != 0:
+            print('DB 생성에 실패했습니다. 가상환경을 켜고 pip install -r requirements.txt 를 했는지 확인하세요.')
+            print(r.stderr[-800:])
+            return False
+    return True
 
 
 def main():
@@ -276,7 +298,7 @@ def main():
     ap.add_argument('--mode', choices=['exam', 'random'], default='exam', help='exam: 시험 원본 9문제, random: 무작위 변형')
     ap.add_argument('--count', type=int, default=5, help='random 모드에서 심을 버그 수 (기본 5)')
     ap.add_argument('--seed', type=int, default=None, help='같은 문제를 다시 만들고 싶을 때 지정')
-    ap.add_argument('--src', default=os.path.join(ROOT, 'skeleton'))
+    ap.add_argument('--src', default=default_src(), help='복사할 원본 프로젝트 (기본: exam/)')
     ap.add_argument('--out', default=os.path.join(ROOT, 'practice'))
     ap.add_argument('--force', action='store_true', help='출력 폴더가 있으면 지우고 다시 생성')
     args = ap.parse_args()
@@ -334,8 +356,11 @@ def main():
         for i, (bid, fname, _, symptom, answer) in enumerate(chosen, 1):
             f.write(f'{i}. ({bid}) {fname} → {answer}\n')
 
+    db_ok = build_db(out)
     print(f'연습 프로젝트를 만들었습니다: {out}')
     print(f'심은 버그 {len(chosen)}개 · 증상은 {rel}/PRACTICE.md')
+    if db_ok:
+        print(f'서버 실행: cd {rel} && python manage.py runserver')
     print(f'채점: python tools/grade.py {rel}')
 
 

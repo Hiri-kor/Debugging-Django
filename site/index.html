@@ -163,6 +163,14 @@ pre.code .ln .mk { display: inline-block; width: 1.4em; color: var(--muted); use
 pre.code .ln.add .mk { color: var(--ok); } pre.code .ln.del .mk { color: var(--err); }
 pre.code .cm { color: var(--muted); font-style: italic; }
 
+.editor-wrap { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+textarea.editor { font-family: var(--f-mono); font-size: 0.82rem; line-height: 1.6; background: var(--code-bg); white-space: pre; overflow-x: auto; overflow-wrap: normal; tab-size: 4; min-height: 0; resize: vertical; }
+.ed-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.ed-note { color: var(--muted); font-size: 0.8rem; }
+.ed-result { border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; font-size: 0.92rem; }
+.ed-result.good { background: var(--ok-soft); } .ed-result.good b { color: var(--ok); }
+.ed-result.warn { background: var(--warn-soft); } .ed-result.warn b { color: var(--warn); }
+.ed-result.bad { background: var(--err-soft); } .ed-result.bad b { color: var(--err); }
 .why { display: flex; flex-direction: column; gap: 8px; max-width: 70ch; }
 .variants li { color: var(--ink); }
 .selfmark { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; padding-top: 4px; border-top: 1px dashed var(--line); padding-top: 14px; }
@@ -223,6 +231,7 @@ textarea { width: 100%; min-height: 120px; font: inherit; font-size: 0.92rem; pa
     <div class="brand"><b>Booklog 디버깅 랩</b><span>SSAFY 16기 5회차 월말평가 · DRF 디버깅 재시험 대비</span></div>
     <nav class="tabs" id="tabs">
       <a href="#overview">개요</a>
+      <a href="#start">시작하기</a>
       <a href="#problems">문제 01–09</a>
       <a href="#essay">서술형 10·11</a>
       <a href="#quiz">변형 퀴즈</a>
@@ -248,8 +257,8 @@ textarea { width: 100%; min-height: 120px; font: inherit; font-size: 0.92rem; pa
   <div class="stats">
     <div class="stat"><span class="n">100</span><span class="l">총점 (코드 80 + 서술 20)</span></div>
     <div class="stat"><span class="n">2</span><span class="l">수정 파일 (views · serializers)</span></div>
-    <div class="stat"><span class="n" id="ov-solved">5 / 9</span><span class="l">내 스켈레톤에서 해결된 문제</span></div>
-    <div class="stat"><span class="n" id="ov-self">0 / 9</span><span class="l">혼자 다시 풀어 본 문제</span></div>
+    <div class="stat"><span class="n">50<small style="font-size:.9rem;font-weight:500">분</small></span><span class="l">권장 풀이 시간</span></div>
+    <div class="stat"><span class="n" id="ov-self">0 / 9</span><span class="l">내가 맞힌 문제 (이 브라우저)</span></div>
   </div>
 
   <div class="panel">
@@ -268,10 +277,10 @@ textarea { width: 100%; min-height: 120px; font: inherit; font-size: 0.92rem; pa
   </div>
 
   <div class="panel">
-    <h2>배점과 내 코드 상태</h2>
-    <p class="lede">현재 <code>skeleton/</code> 코드를 주어진 DB의 복사본에 실제 요청으로 돌려 본 결과입니다(2026-11-23 확인). 코드 문항 기준 <b>45 / 80점</b>까지 동작합니다. 다만 고친 줄에 설명 주석이 없으면 감점될 수 있습니다.</p>
+    <h2>문항과 배점</h2>
+    <p class="lede">번호를 누르면 문제 카드로 이동합니다. 카드마다 버그가 든 코드가 있어서 Python 없이 브라우저에서 바로 고쳐 보고 채점받을 수 있습니다.</p>
     <div class="scroll-x"><table class="score-table" id="score-table">
-      <thead><tr><th>번호</th><th>요청</th><th>수정 파일</th><th>배점</th><th>내 코드</th></tr></thead>
+      <thead><tr><th>번호</th><th>요청</th><th>수정 파일</th><th>배점</th><th>핵심 개념</th></tr></thead>
       <tbody></tbody>
     </table></div>
   </div>
@@ -290,7 +299,66 @@ textarea { width: 100%; min-height: 120px; font: inherit; font-size: 0.92rem; pa
 
   <div class="callout info">
     <b>연습하다 DB가 바뀌었다면</b>
-    지금 DB에서는 도서 5번과 댓글 1번이 이미 삭제되어 있어 PDF 예시와 같은 pk로 요청하면 404가 납니다. 원래 상태로 돌리려면 <code>db.sqlite3</code>를 지우고 <code>python manage.py migrate</code> → <code>python manage.py loaddata books.json comments.json</code>을 실행하세요. 시험장에서는 주어진 DB를 그대로 써야 합니다.
+    삭제 요청을 몇 번 보내고 나면 예시와 같은 pk로 요청했을 때 404가 납니다. 처음 상태로 돌리려면 <code>db.sqlite3</code>를 지우고 <code>python manage.py migrate</code> → <code>python manage.py loaddata books.json comments.json</code>을 실행하세요. 실제 시험장에서는 주어진 DB를 그대로 써야 합니다.
+  </div>
+</section>
+
+<!-- ============ START ============ -->
+<section class="view" id="v-start" hidden>
+  <div class="section-head">
+    <span class="eyebrow">시작하기</span>
+    <h1>두 가지 방법으로 풀 수 있습니다</h1>
+    <p class="lede">시험 프로젝트가 없어도 됩니다. 가볍게 풀어 보려면 이 사이트에서, 실제 시험처럼 서버를 띄워 Postman으로 확인하려면 레포를 받아서 푸세요.</p>
+  </div>
+
+  <div class="essay-grid">
+    <div class="panel">
+      <span class="eyebrow">A · 설치 없이</span>
+      <h2>브라우저에서 바로</h2>
+      <ul class="clean">
+        <li><a href="#problems">문제 01–09</a> 탭의 편집기에서 버그 코드를 고치고 <b>채점</b>을 누릅니다.</li>
+        <li>정답 여부와 함께 주석을 달았는지도 알려 줍니다.</li>
+        <li>고친 코드와 맞힌 문제는 이 브라우저에 저장됩니다.</li>
+        <li>코드 패턴으로만 판정하므로, 실제 서버 동작까지 확인하려면 B 방법을 쓰세요.</li>
+      </ul>
+    </div>
+    <div class="panel">
+      <span class="eyebrow">B · 실제 시험처럼</span>
+      <h2>레포를 받아서</h2>
+      <ul class="clean">
+        <li><code>exam/</code> 폴더가 시험과 같은 버그 9개가 든 Django 프로젝트입니다.</li>
+        <li><code>exam/README.md</code>에 문제, 규칙, 요청 예시가 있습니다.</li>
+        <li>다 풀면 <code>python tools/grade.py exam</code>으로 채점합니다.</li>
+        <li>변형 문제는 <a href="#tools">실습 도구</a> 탭의 생성기로 만듭니다.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>B 방법 설치 (Python 3.11 이상)</h2>
+<pre class="code"><span class="ln"><span class="mk"></span>git clone https://github.com/Hiri-kor/Debugging-Django.git</span><span class="ln"><span class="mk"></span>cd Debugging-Django</span><span class="ln"><span class="mk"></span>python -m venv venv</span><span class="ln"><span class="mk"></span>venv\Scripts\activate            <span class="cm"># macOS/Linux: source venv/bin/activate</span></span><span class="ln"><span class="mk"></span>pip install -r requirements.txt</span><span class="ln"><span class="mk"></span></span><span class="ln"><span class="mk"></span>cd exam</span><span class="ln"><span class="mk"></span>python manage.py migrate</span><span class="ln"><span class="mk"></span>python manage.py loaddata books.json comments.json</span><span class="ln"><span class="mk"></span>python manage.py runserver</span></pre>
+    <p class="lede">서버가 켜지면 Postman으로 <code>http://127.0.0.1:8000/api/v1/books/</code>부터 요청해 보세요. 각 문제 카드의 "Postman으로 확인하기"에 요청 예시가 있습니다. 처음부터 다시 풀려면 레포 루트에서 <code>git checkout -- exam/</code>을 실행합니다.</p>
+  </div>
+
+  <div class="panel">
+    <h2>프로젝트 한눈에 보기</h2>
+    <div class="scroll-x"><table class="method-table">
+      <thead><tr><th>모델</th><th>필드</th><th>초기 데이터</th></tr></thead>
+      <tbody>
+        <tr><td><code>Book</code></td><td>id, title, author, content, finished, created_at, updated_at</td><td>5권</td></tr>
+        <tr><td><code>Comment</code></td><td>id, book (FK → Book, <b>related_name 없음</b>), content, created_at, updated_at</td><td>6개 (도서별 3 · 1 · 2 · 0 · 0)</td></tr>
+      </tbody>
+    </table></div>
+    <div class="scroll-x"><table class="method-table">
+      <thead><tr><th>URL</th><th>뷰 함수</th><th>허용 메서드 (정상)</th></tr></thead>
+      <tbody>
+        <tr><td><code>books/</code></td><td><code>book_list</code></td><td>GET, POST</td></tr>
+        <tr><td><code>books/&lt;int:book_pk&gt;/</code></td><td><code>book_detail</code></td><td>GET, PUT, DELETE</td></tr>
+        <tr><td><code>comments/</code></td><td><code>comment_list</code></td><td>GET</td></tr>
+        <tr><td><code>comments/&lt;int:comment_pk&gt;/</code></td><td><code>comment_detail</code></td><td>GET, PUT, DELETE</td></tr>
+        <tr><td><code>books/&lt;int:book_pk&gt;/comments/</code></td><td><code>comment_create</code></td><td>POST</td></tr>
+      </tbody>
+    </table></div>
   </div>
 </section>
 
@@ -299,7 +367,7 @@ textarea { width: 100%; min-height: 120px; font: inherit; font-size: 0.92rem; pa
   <div class="section-head">
     <span class="eyebrow">문제 01–09 · 코드 80점</span>
     <h1>증상을 보고 한 줄을 찾기</h1>
-    <p class="lede">카드마다 버그가 든 원래 코드를 보여 줍니다. 먼저 혼자 고칠 줄을 정한 뒤 힌트, 정답 순서로 펼쳐 보세요. 마지막에 스스로 채점하면 개요 탭에 반영됩니다.</p>
+    <p class="lede">카드마다 버그가 든 코드가 편집기에 들어 있습니다. 직접 고치고 <b>채점</b>을 누르면 정답 여부와 주석 유무를 알려 줍니다. 막히면 힌트, 정답, 해설 순서로 펼쳐 보세요.</p>
   </div>
   <div class="pnav" id="pnav"></div>
   <div id="cards" style="display:flex;flex-direction:column;gap:20px"></div>
@@ -310,13 +378,13 @@ textarea { width: 100%; min-height: 120px; font: inherit; font-size: 0.92rem; pa
   <div class="section-head">
     <span class="eyebrow">서술형 · 20점</span>
     <h1>키워드에 근거와 예시를 붙이기</h1>
-    <p class="lede">지금 답안은 키워드는 맞지만 한 줄짜리라 부분 점수에 머물 가능성이 큽니다. 10점짜리 문항이니 목적, 동작 방식, 이 프로젝트의 예시까지 적어 주세요. 답안은 <code>problem_10_11.md</code>의 [답안 작성] 아래에만 쓰고, 문제 문장과 <code>---</code> 구분선은 지우지 않습니다.</p>
+    <p class="lede">키워드만 나열한 한 줄 답안은 부분 점수에 머물기 쉽습니다. 10점짜리 문항이니 목적, 동작 방식, 이 프로젝트의 예시까지 적어 주세요. 답안은 <code>problem_10_11.md</code>의 [답안 작성] 아래에만 쓰고, 문제 문장과 <code>---</code> 구분선은 지우지 않습니다.</p>
   </div>
 
   <div class="panel">
     <div class="card-title"><span class="no">10</span><h2>HTTP Request Method 4가지</h2><span class="pts">10점</span></div>
     <div class="essay-grid">
-      <div><span class="lbl">지금 내 답안</span><div class="answer-box">-GET: 조회 요청, POST: 생성 요청, PUT: 수정 요청, DELETE: 삭제 요청</div></div>
+      <div><span class="lbl">부족한 답안 예시</span><div class="answer-box">-GET: 조회 요청, POST: 생성 요청, PUT: 수정 요청, DELETE: 삭제 요청</div></div>
       <div><span class="lbl">보완할 점</span><div class="answer-box">메서드와 CRUD 대응은 맞습니다. 각 메서드가 무엇을 대상으로 하는지(목록인지 단건인지), 요청 본문이 필요한지, 성공 시 상태 코드가 무엇인지까지 쓰면 “목적”을 설명했다고 볼 수 있습니다. 첫 줄의 “-GET” 은 “- GET” 으로 띄어 써야 목록으로 보입니다.</div></div>
     </div>
     <div class="scroll-x"><table class="method-table">
@@ -341,7 +409,7 @@ textarea { width: 100%; min-height: 120px; font: inherit; font-size: 0.92rem; pa
   <div class="panel">
     <div class="card-title"><span class="no">11</span><h2>Serializer의 many=True 옵션</h2><span class="pts">10점</span></div>
     <div class="essay-grid">
-      <div><span class="lbl">지금 내 답안</span><div class="answer-box">- 단일 대상이 아닌 다량의 것을 받을 때 사용한다.</div></div>
+      <div><span class="lbl">부족한 답안 예시</span><div class="answer-box">- 단일 대상이 아닌 다량의 것을 받을 때 사용한다.</div></div>
       <div><span class="lbl">보완할 점</span><div class="answer-box">“다량의 것”이 무엇인지 구체적으로 써야 합니다. 직렬화 대상이 QuerySet이나 리스트처럼 여러 객체라는 점, 내부적으로 ListSerializer가 각 객체를 같은 규칙으로 변환해 리스트로 돌려준다는 점, 쓰지 않으면 오류가 난다는 점을 예시와 함께 적어 주세요.</div></div>
     </div>
     <pre class="code"><span class="ln"><span class="mk"> </span><span class="cm"># 1) 목록 조회: QuerySet(여러 객체) → JSON 배열</span></span><span class="ln"><span class="mk"> </span>books = get_list_or_404(Book)</span><span class="ln"><span class="mk"> </span>serializer = BookListSerializer(books, many=True)</span><span class="ln"><span class="mk"> </span></span><span class="ln"><span class="mk"> </span><span class="cm"># 2) 역참조 중첩: 도서 1개에 달린 댓글 여러 개</span></span><span class="ln"><span class="mk"> </span>comment_set = CommentDetailSerializer(many=True, read_only=True)</span></pre>
@@ -476,12 +544,12 @@ textarea { width: 100%; min-height: 120px; font: inherit; font-size: 0.92rem; pa
   <div class="section-head">
     <span class="eyebrow">실습 도구 · 레포 tools/</span>
     <h1>버그를 심고, 고치고, 채점하기</h1>
-    <p class="lede">레포의 <code>tools/</code>에 두 개의 스크립트가 있습니다. 연습 문제 생성기는 <code>skeleton/</code>을 복사해 버그를 새로 심고, 자동 채점기는 Postman 대신 9개 요청을 보내 PASS/FAIL을 알려 줍니다. 둘 다 원본 <code>skeleton/</code>과 <code>db.sqlite3</code>는 건드리지 않습니다.</p>
+    <p class="lede">레포의 <code>tools/</code>에 두 개의 스크립트가 있습니다. 연습 문제 생성기는 <code>exam/</code>을 복사해 버그를 새로 심고, 자동 채점기는 Postman 대신 9개 요청을 보내 PASS/FAIL을 알려 줍니다. 둘 다 원본 폴더와 그 안의 <code>db.sqlite3</code>는 건드리지 않습니다.</p>
   </div>
 
   <div class="panel">
     <h2>준비 (처음 한 번)</h2>
-<pre class="code"><span class="ln"><span class="mk"></span><span class="cm"># 레포 루트(Debugging-Django)에서</span></span><span class="ln"><span class="mk"></span>python -m venv venv</span><span class="ln"><span class="mk"></span>venv\Scripts\activate</span><span class="ln"><span class="mk"></span>pip install -r skeleton/requirements.txt</span></pre>
+<pre class="code"><span class="ln"><span class="mk"></span><span class="cm"># 레포 루트(Debugging-Django)에서</span></span><span class="ln"><span class="mk"></span>python -m venv venv</span><span class="ln"><span class="mk"></span>venv\Scripts\activate</span><span class="ln"><span class="mk"></span>pip install -r requirements.txt</span></pre>
   </div>
 
   <div class="panel">
@@ -497,7 +565,7 @@ textarea { width: 100%; min-height: 120px; font: inherit; font-size: 0.92rem; pa
 
   <div class="panel">
     <h2>2. 고친 뒤 채점하기</h2>
-<pre class="code"><span class="ln"><span class="mk"></span>python tools/grade.py practice     <span class="cm"># 연습 프로젝트 채점</span></span><span class="ln"><span class="mk"></span>python tools/grade.py skeleton     <span class="cm"># 내 시험 코드 채점</span></span></pre>
+<pre class="code"><span class="ln"><span class="mk"></span>python tools/grade.py practice     <span class="cm"># 연습 프로젝트 채점</span></span><span class="ln"><span class="mk"></span>python tools/grade.py exam         <span class="cm"># exam/ 에서 직접 푼 경우</span></span></pre>
     <p class="lede">임시 DB를 fixtures로 새로 채우고 검사마다 되돌리므로, 몇 번을 돌려도 같은 데이터에서 시작합니다. 서버가 못 뜨는 상태(SyntaxError 등)면 그 사실을 먼저 알려 줍니다.</p>
 <pre class="code"><span class="ln"><span class="mk"></span>  PASS  [01] 도서 목록 응답 필드</span><span class="ln"><span class="mk"></span>  PASS  [02] 도서 생성 201</span><span class="ln"><span class="mk"></span>  FAIL  [03] 댓글 생성 (content만)</span><span class="ln"><span class="mk"></span>        상태 코드 400 (기대값 201) · 응답: {'book': ['This field is required.']}</span><span class="ln"><span class="mk"></span>  ...</span><span class="ln"><span class="mk"></span>  코드 문항 점수: 45 / 80</span><span class="ln"><span class="mk"></span>  다시 볼 문제: 03, 04, 06, 07</span></pre>
     <div class="callout"><b>채점기가 확인하지 못하는 것</b>지정 파일 외 수정 여부, 주석 유무, 서술형 답안은 직접 확인해야 합니다. 시험 채점 기준과 똑같다는 보장도 없으니, 마지막엔 Postman으로 한 번 더 요청을 보내 보세요.</div>
@@ -506,7 +574,7 @@ textarea { width: 100%; min-height: 120px; font: inherit; font-size: 0.92rem; pa
   <div class="panel">
     <h2>추천 연습 순서</h2>
     <ul class="clean">
-      <li><b>1회차:</b> <code>--mode exam</code>으로 원본 9문제를 시간 재고(50분) 풀기 → 채점 → 문제 탭에서 틀린 것 복습</li>
+      <li><b>1회차:</b> <code>exam/</code>에서 원본 9문제를 시간 재고(50분) 풀기 → 채점 → 문제 탭에서 틀린 것 복습</li>
       <li><b>2회차:</b> <code>--mode random --count 6</code>을 seed 없이 2–3번. 처음 보는 500 에러는 에러 사전에서 검색</li>
       <li><b>3회차:</b> 아무것도 보지 않고 서술형 10·11을 다시 쓰고 모범 답안과 비교</li>
       <li><b>시험 전날:</b> 개념 정리 탭과 제출 체크리스트만 훑기</li>
@@ -818,6 +886,11 @@ textarea { width: 100%; min-height: 120px; font: inherit; font-size: 0.92rem; pa
     '09': ['PUT http://127.0.0.1:8000/api/v1/comments/<남아 있는 번호>/', '{', '    "content": "두 번째 읽으니 더 좋네요.",', '    "book": 1', '}', '', '# 확인: 200 OK, 응답 content가 바뀌고 updated_at이 갱신', '# 03번을 고친 뒤에는 body의 book은 무시됨 (정상)']
   };
 
+  const CONCEPT = {
+    '01': 'Meta.fields', '02': 'Response status', '03': 'read_only_fields', '04': 'partial=True', '05': 'Response status',
+    '06': '역참조 comment_set · 중첩', '07': 'SerializerMethodField · obj', '08': '@api_view 메서드', '09': 'is_valid → save'
+  };
+
   const methodCls = m => 'method m-' + m;
   const statusChip = (s) => {
     const code = parseInt(s, 10);
@@ -832,8 +905,8 @@ textarea { width: 100%; min-height: 120px; font: inherit; font-size: 0.92rem; pa
       <td><span class="${methodCls(p.method)}">${p.method}</span> ${esc(p.title)}</td>
       <td class="mono" style="font-size:.82rem">${p.file.replace('books/', '')}</td>
       <td class="num">${p.pts}</td>
-      <td>${p.mine ? '<span class="chip ok">동작함</span>' : '<span class="chip err">미해결</span>'}</td>
-    </tr>`).join('') + `<tr><td></td><td><b>서술형 10 · 11</b></td><td class="mono" style="font-size:.82rem">problem_10_11.md</td><td class="num">20</td><td><span class="chip warn">보완 필요</span></td></tr>`;
+      <td style="font-size:.88rem">${CONCEPT[p.no]}</td>
+    </tr>`).join('') + `<tr><td><a href="#essay" class="mono">10·11</a></td><td><b>서술형</b> HTTP Method · many=True</td><td class="mono" style="font-size:.82rem">problem_10_11.md</td><td class="num">20</td><td style="font-size:.88rem">개념 설명</td></tr>`;
 
   // cards
   const marks = store.get('marks', {});
@@ -849,15 +922,20 @@ textarea { width: 100%; min-height: 120px; font: inherit; font-size: 0.92rem; pa
           <div class="bad"><span class="lbl">현재 증상</span>${statusChip(p.bad[0])}<span>${esc(p.bad[1])}</span></div>
           <div class="good"><span class="lbl">정상 동작</span>${statusChip(p.good[0])}<span>${esc(p.good[1])}</span></div>
         </div>
-        <div class="mine">내 스켈레톤: ${p.mine ? '<span class="chip ok">이미 고쳐져 동작함</span> 고친 줄에 설명 주석이 있는지 확인하세요.' : '<span class="chip err">아직 버그 그대로</span>'}</div>
-        <details class="step"><summary>Postman으로 확인하기</summary><div class="inner">
+        <div class="editor-wrap">
+          <label class="eyebrow" for="ed-${p.no}">버그가 든 코드 · ${p.file} · 직접 고쳐 보세요</label>
+          <textarea class="editor" id="ed-${p.no}" spellcheck="false" autocapitalize="off" autocomplete="off" data-ed="${p.no}"></textarea>
+          <div class="ed-actions">
+            <button class="btn primary" data-check="${p.no}">채점</button>
+            <button class="btn" data-restore="${p.no}">원래 코드로</button>
+            <span class="ed-note">Tab은 공백 4칸 · 고친 내용은 이 브라우저에 저장</span>
+          </div>
+          <div class="ed-result" id="res-${p.no}" hidden></div>
+        </div>
+        <details class="step"><summary>Postman으로 확인하기 (레포에서 풀 때)</summary><div class="inner">
           ${codeBlock(REQ[p.no].map(l => ' ' + l).join('\n'))}
           <p class="lede" style="font-size:.88rem">Body는 raw · JSON으로 보냅니다. URL 끝의 <code>/</code>를 빼먹지 마세요.</p>
         </div></details>
-        <div>
-          <span class="eyebrow">버그가 든 코드 · ${p.file}</span>
-          ${codeBlock(p.buggy)}
-        </div>
         <details class="step"><summary>1단계 · 힌트</summary><div class="inner"><p>${p.hint}</p></div></details>
         <details class="step"><summary>2단계 · 정답 diff (주석 포함)</summary><div class="inner">${codeBlock(p.fix)}</div></details>
         <details class="step"><summary>3단계 · 왜 이렇게 고치나</summary><div class="inner"><ul class="clean why">${p.why.map(w => `<li>${w}</li>`).join('')}</ul></div></details>
@@ -868,6 +946,127 @@ textarea { width: 100%; min-height: 120px; font: inherit; font-size: 0.92rem; pa
         </div>
       </div>
     </article>`).join('');
+
+  // ---------- in-browser editor & checker ----------
+  const original = no => P.find(p => p.no === no).buggy.replace(/^\n/, '').split('\n').map(l => l.slice(1)).join('\n');
+  const edits = store.get('edits', {});
+  const stripComments = s => s.split('\n').map(l => l.replace(/#.*$/, '')).join('\n');
+  const norm = s => stripComments(s).replace(/"/g, "'").replace(/\s+/g, '');
+  const names = inside => inside.split(',').map(x => x.replace(/'/g, '')).filter(Boolean);
+  const sameSet = (a, b) => a.length === b.length && b.every(x => a.includes(x));
+  const countComments = s => s.split('\n').filter(l => /#/.test(l)).length;
+
+  // 각 검사는 실패 시 이유 문자열, 통과 시 null 을 반환
+  const CHECKS = {
+    '01': n => {
+      if (n.includes("fields='__all__'")) return "아직 fields = '__all__' 입니다. 응답할 필드만 튜플로 나열하세요.";
+      const ex = n.match(/exclude=[\(\[](.*?)[\)\]]/);
+      if (ex && !/fields=/.test(n)) return sameSet(names(ex[1]), ['content', 'finished', 'created_at', 'updated_at']) ? null : 'exclude로 뺀 필드가 맞지 않습니다.';
+      const m = n.match(/fields=[\(\[](.*?)[\)\]]/);
+      if (!m) return 'fields를 튜플이나 리스트로 지정하세요. 원소 하나짜리 튜플은 콤마가 필요합니다.';
+      const f = names(m[1]);
+      if (!f.includes('num_of_comments')) return '직접 선언한 num_of_comments가 fields에 없습니다. 이 상태면 AssertionError로 500이 납니다.';
+      return sameSet(f, ['id', 'title', 'author', 'num_of_comments']) ? null : `fields가 [${f.join(', ')}] 입니다. id, title, author, num_of_comments 네 개여야 합니다.`;
+    },
+    '02': n => /returnResponse\(serializer\.data,status=(status\.HTTP_201_CREATED|201)\)/.test(n) ? null
+      : (/HTTP_201_CREATE[^D]|HTTP_201_CREATE$/.test(n) ? '상수 이름 오타입니다. status.HTTP_201_CREATED' : '생성 성공 응답에 201 상태 코드를 지정하세요.'),
+    '03': n => {
+      if (n.includes('exclude')) return 'exclude는 응답에서도 book을 없앱니다. 응답에 book이 포함되어야 합니다.';
+      if (!n.includes("fields='__all__'") && !/fields=[\(\[].*'book'/.test(n)) return 'fields에서 book을 빼면 응답에서도 사라집니다.';
+      return /read_only_fields=[\(\[]'book',?[\)\]]/.test(n) ? null : '입력 검증에서만 book을 빼는 Meta 옵션이 필요합니다.';
+    },
+    '04': n => {
+      const m = n.match(/BookSerializer\((.*?)\)ifserializer/);
+      if (!m) return 'BookSerializer(...) 호출을 찾을 수 없습니다.';
+      const a = m[1].split(',');
+      if (!(a[0] === 'book' || a.includes('instance=book'))) return '수정할 기존 객체(book)를 첫 번째 인자로 넘겨야 합니다. 없으면 새 도서가 생성됩니다.';
+      if (!a.includes('data=request.data')) return 'data=request.data가 빠졌습니다.';
+      return a.includes('partial=True') ? null : '보낸 필드만 검증하도록 하는 인자를 추가하세요. (views.py에서 해결)';
+    },
+    '05': n => {
+      if (!n.includes('book.delete()')) return 'book.delete()가 사라졌습니다.';
+      if (/HTTP_200_OK|status=200/.test(n)) return '아직 200을 반환합니다.';
+      return /status=(status\.HTTP_204_NO_CONTENT|204)/.test(n) ? null : '삭제 성공 응답 상태 코드를 지정하세요.';
+    },
+    '06': n => {
+      if (/comments=CommentDetailSerializer/.test(n)) return 'Book에는 comments 속성이 없습니다. related_name이 없을 때의 역참조 이름을 쓰세요.';
+      if (/source=/.test(n)) return "source='comment_set'을 쓰면 응답 키가 comment_set이 아니게 됩니다. 필드 이름 자체를 바꾸세요.";
+      const m = n.match(/comment_set=CommentDetailSerializer\((.*?)\)/);
+      if (!m) return 'comment_set 필드 선언을 찾을 수 없습니다.';
+      const a = m[1].split(',');
+      if (!a.includes('many=True')) return '댓글은 여러 개이므로 many=True가 필요합니다.';
+      if (!a.includes('read_only=True')) return '조회용 중첩 필드이므로 read_only=True를 유지하세요.';
+      const inner = n.match(/model=Comment,?fields=(.*?)(?=comment_set=|classMeta)/);
+      if (!inner) return '안쪽 CommentDetailSerializer의 Meta.fields를 찾을 수 없습니다.';
+      const f = inner[1].match(/[\(\[](.*?)[\)\]]/);
+      return f && sameSet(names(f[1]), ['id', 'content']) ? null : "댓글은 id, content만 응답해야 합니다. 안쪽 Meta.fields를 확인하세요.";
+    },
+    '07': n => {
+      if (!n.includes('defget_num_of_comments(self,obj)')) return '메서드 이름은 get_num_of_comments 여야 합니다.';
+      if (/returnComment\.objects\.count\(\)/.test(n)) return '아직 전체 댓글 수를 셉니다. obj를 사용하세요.';
+      if (/returnobj\.comment_set$/.test(n)) return '매니저 객체가 아니라 개수를 반환해야 합니다.';
+      return /return(obj\.comment_set(\.all\(\))?\.count\(\)|Comment\.objects\.filter\(book(_id)?=obj(\.pk|\.id)?\)\.count\(\)|len\(obj\.comment_set\.all\(\)\))/.test(n) ? null : '현재 도서(obj)에 달린 댓글 수를 반환하세요.';
+    },
+    '08': n => {
+      const m = n.match(/@api_view\(\[(.*?)\]\)defcomment_detail/);
+      if (!m) return '@api_view 데코레이터가 comment_detail 바로 위에 있어야 합니다.';
+      const ms = names(m[1]).map(x => x.toUpperCase());
+      return ['GET', 'PUT', 'DELETE'].every(x => ms.includes(x)) ? null : `허용 메서드가 [${ms.join(', ')}] 입니다. 기존 GET, PUT을 유지하면서 하나를 추가하세요.`;
+    },
+    '09': n => {
+      const v = n.indexOf('ifserializer.is_valid():'), s = n.indexOf('serializer.save()'), r = n.indexOf('returnResponse(serializer.data');
+      if (s < 0) return '검증만 하고 DB에 반영하는 호출이 없습니다.';
+      if (v < 0 || s < v) return 'save()는 is_valid() 검사를 통과한 뒤에 호출해야 합니다.';
+      return s < r ? null : 'save()는 응답을 반환하기 전에 호출해야 합니다.';
+    }
+  };
+
+  function setEditor(no, text) {
+    const ta = document.getElementById('ed-' + no);
+    ta.value = text;
+    ta.rows = Math.max(5, text.split('\n').length + 1);
+  }
+  P.forEach(p => setEditor(p.no, edits[p.no] != null ? edits[p.no] : original(p.no)));
+
+  cardsEl.addEventListener('input', e => {
+    const ta = e.target.closest('[data-ed]'); if (!ta) return;
+    edits[ta.dataset.ed] = ta.value; store.set('edits', edits);
+  });
+  cardsEl.addEventListener('keydown', e => {
+    if (e.key !== 'Tab' || !e.target.matches('.editor')) return;
+    e.preventDefault();
+    const ta = e.target, s = ta.selectionStart;
+    ta.setRangeText('    ', s, ta.selectionEnd, 'end');
+    ta.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  cardsEl.addEventListener('click', e => {
+    const c = e.target.closest('[data-check]');
+    if (c) {
+      const no = c.dataset.check, code = document.getElementById('ed-' + no).value;
+      const res = document.getElementById('res-' + no);
+      let err;
+      try { err = CHECKS[no](norm(code)); } catch (x) { err = '코드를 해석하지 못했습니다. 괄호와 따옴표를 확인하세요.'; }
+      const noComment = countComments(code) <= countComments(original(no));
+      res.hidden = false;
+      if (err) {
+        res.className = 'ed-result bad';
+        res.innerHTML = `<b>아직 아닙니다</b><span>${esc(err)}</span>`;
+      } else {
+        res.className = 'ed-result ' + (noComment ? 'warn' : 'good');
+        res.innerHTML = noComment
+          ? '<b>동작은 정답입니다</b><span>그런데 고친 줄에 설명 주석이 없습니다. 실제 시험에서는 감점 대상입니다. <code># ...</code> 주석을 달고 다시 채점해 보세요.</span>'
+          : '<b>정답입니다</b><span>주석까지 갖췄습니다. 아래 정답 diff와 비교해 보세요.</span>';
+        marks[no] = 'ok'; store.set('marks', marks); renderMarks();
+      }
+      return;
+    }
+    const r = e.target.closest('[data-restore]');
+    if (r) {
+      const no = r.dataset.restore;
+      setEditor(no, original(no)); delete edits[no]; store.set('edits', edits);
+      document.getElementById('res-' + no).hidden = true;
+    }
+  });
 
   const pnav = document.getElementById('pnav');
   function renderMarks() {
@@ -1215,7 +1414,7 @@ def comment_create(request, book_pk):
   }
 
   // ---------- routing ----------
-  const views = ['overview', 'problems', 'essay', 'quiz', 'concepts', 'code', 'errors', 'tools', 'checklist'];
+  const views = ['overview', 'start', 'problems', 'essay', 'quiz', 'concepts', 'code', 'errors', 'tools', 'checklist'];
   function route() {
     let h = (location.hash || '#overview').slice(1);
     let target = null;

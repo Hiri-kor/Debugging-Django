@@ -2,7 +2,7 @@
 Booklog 디버깅 자동 채점기
 
 사용법 (프로젝트의 가상환경을 켠 상태에서, 레포 루트에서 실행):
-    python tools/grade.py skeleton
+    python tools/grade.py exam
     python tools/grade.py practice
 
 - 프로젝트의 db.sqlite3는 건드리지 않습니다. 임시 DB를 만들고 fixtures로 채운 뒤 검사합니다.
@@ -181,7 +181,7 @@ def run_checks():
 
 
 def main():
-    target = sys.argv[1] if len(sys.argv) > 1 else 'skeleton'
+    target = sys.argv[1] if len(sys.argv) > 1 else 'exam'
     project_dir = os.path.abspath(target)
     if not os.path.exists(os.path.join(project_dir, 'manage.py')):
         print(f'{RED}manage.py를 찾을 수 없습니다: {project_dir}{RESET}')
