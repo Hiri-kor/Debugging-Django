@@ -226,7 +226,10 @@ textarea { width: 100%; min-height: 120px; font: inherit; font-size: 0.92rem; pa
       <a href="#problems">문제 01–09</a>
       <a href="#essay">서술형 10·11</a>
       <a href="#quiz">변형 퀴즈</a>
+      <a href="#concepts">개념 정리</a>
+      <a href="#code">정답 코드</a>
       <a href="#errors">에러 사전</a>
+      <a href="#tools">실습 도구</a>
       <a href="#checklist">제출 체크리스트</a>
     </nav>
   </div>
@@ -372,6 +375,90 @@ textarea { width: 100%; min-height: 120px; font: inherit; font-size: 0.92rem; pa
   </div>
 </section>
 
+<!-- ============ CONCEPTS ============ -->
+<section class="view" id="v-concepts" hidden>
+  <div class="section-head">
+    <span class="eyebrow">개념 정리</span>
+    <h1>시험에 나온 DRF 개념 한 장</h1>
+    <p class="lede">9문제는 모두 아래 네 가지 개념으로 풀립니다. Serializer에 무엇을 넘기는지, Meta에서 무엇을 고르는지, 역참조 이름이 무엇인지, 상태 코드를 어디서 정하는지입니다.</p>
+  </div>
+
+  <div class="panel">
+    <h2>Serializer를 만드는 다섯 가지 방법</h2>
+    <p class="lede">인자 조합이 그 serializer의 역할을 정합니다. <code>save()</code>는 instance가 있으면 <code>update()</code>, 없으면 <code>create()</code>를 부릅니다.</p>
+    <div class="scroll-x"><table class="method-table">
+      <thead><tr><th>코드</th><th>역할</th><th>이 프로젝트에서</th><th>관련 문제</th></tr></thead>
+      <tbody>
+        <tr><td><code>Serializer(obj)</code></td><td>객체 1개 → JSON</td><td>상세 조회, 댓글 단건 조회</td><td><a href="#p06">06</a></td></tr>
+        <tr><td><code>Serializer(qs, many=True)</code></td><td>여러 객체 → JSON 배열</td><td>도서 목록, 댓글 목록</td><td><a href="#p01">01</a> · 서술 11</td></tr>
+        <tr><td><code>Serializer(data=request.data)</code></td><td>입력 검증 → <code>save()</code> 시 생성</td><td>도서 생성, 댓글 생성</td><td><a href="#p02">02</a> <a href="#p03">03</a></td></tr>
+        <tr><td><code>Serializer(obj, data=request.data)</code></td><td>입력 검증 → <code>save()</code> 시 전체 수정</td><td>댓글 수정</td><td><a href="#p09">09</a></td></tr>
+        <tr><td><code>Serializer(obj, data=..., partial=True)</code></td><td>보낸 필드만 검증·수정</td><td>도서 수정</td><td><a href="#p04">04</a></td></tr>
+      </tbody>
+    </table></div>
+  </div>
+
+  <div class="panel">
+    <h2>Meta와 필드 선언</h2>
+    <div class="scroll-x"><table class="method-table">
+      <thead><tr><th>설정</th><th>입력(검증)</th><th>출력(응답)</th><th>메모</th></tr></thead>
+      <tbody>
+        <tr><td><code>fields = '__all__'</code></td><td>모든 필드</td><td>모든 필드 + 선언 필드</td><td>01번 버그의 원인</td></tr>
+        <tr><td><code>fields = ('id', ...)</code></td><td>나열한 필드</td><td>나열한 필드</td><td>선언 필드도 반드시 나열. 원소 하나면 <code>('id',)</code></td></tr>
+        <tr><td><code>exclude = ('book',)</code></td><td>제외</td><td><b>제외</b></td><td><code>fields</code>와 동시 사용 불가</td></tr>
+        <tr><td><code>read_only_fields = ('book',)</code></td><td>제외</td><td><b>포함</b></td><td>03번 정답. 값은 <code>save(book=book)</code>로 넣음</td></tr>
+        <tr><td><code>SerializerMethodField()</code></td><td>없음</td><td><code>get_&lt;필드명&gt;(self, obj)</code> 반환값</td><td>07번. obj는 현재 객체</td></tr>
+        <tr><td><code>XSerializer(many=True, read_only=True)</code></td><td>없음</td><td>중첩 객체 리스트</td><td>06번. 필드 이름 = 속성 이름</td></tr>
+        <tr><td><code>XSerializer(source='comment_set', ...)</code></td><td colspan="2">필드 이름과 속성 이름을 다르게 쓸 때</td><td>응답 키는 필드 이름을 따름</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+
+  <div class="panel">
+    <h2>역참조 이름 규칙</h2>
+    <div class="essay-grid">
+      <div><span class="lbl">related_name이 없을 때 (이 시험)</span>
+<pre class="code"><span class="ln"><span class="mk"></span>book = models.ForeignKey(Book, ...)</span><span class="ln"><span class="mk"></span></span><span class="ln"><span class="mk"></span>book.comment_set.all()     <span class="cm"># 모델명 소문자 + _set</span></span><span class="ln"><span class="mk"></span>book.comment_set.count()</span></pre></div>
+      <div><span class="lbl">related_name='comments'일 때 (변형)</span>
+<pre class="code"><span class="ln"><span class="mk"></span>book = models.ForeignKey(Book, ..., related_name='comments')</span><span class="ln"><span class="mk"></span></span><span class="ln"><span class="mk"></span>book.comments.all()        <span class="cm"># comment_set은 사라짐</span></span><span class="ln"><span class="mk"></span>book.comments.count()</span></pre></div>
+    </div>
+    <p class="lede">시험지를 받으면 <code>models.py</code>에서 ForeignKey의 <code>related_name</code>부터 확인하세요. 06·07번 정답이 이 한 줄에 달려 있습니다.</p>
+  </div>
+
+  <div class="panel">
+    <h2>상태 코드는 어디서 정해지나</h2>
+    <div class="scroll-x"><table class="method-table">
+      <thead><tr><th>코드</th><th>의미</th><th>만드는 곳</th></tr></thead>
+      <tbody>
+        <tr><td><span class="chip ok">200 OK</span></td><td>조회·수정 성공</td><td><code>Response(data)</code> 기본값</td></tr>
+        <tr><td><span class="chip ok">201 Created</span></td><td>생성 성공</td><td><code>status=status.HTTP_201_CREATED</code> 직접 지정</td></tr>
+        <tr><td><span class="chip ok">204 No Content</span></td><td>삭제 성공, 본문 없음</td><td><code>status=status.HTTP_204_NO_CONTENT</code> 직접 지정</td></tr>
+        <tr><td><span class="chip err">400 Bad Request</span></td><td>입력 검증 실패</td><td><code>is_valid()</code>가 False → <code>serializer.errors</code></td></tr>
+        <tr><td><span class="chip err">404 Not Found</span></td><td>URL 또는 객체 없음</td><td>urls.py 매칭 실패, <code>get_object_or_404</code>, <code>get_list_or_404</code></td></tr>
+        <tr><td><span class="chip err">405 Method Not Allowed</span></td><td>메서드 미허용</td><td><code>@api_view([...])</code> 목록</td></tr>
+        <tr><td><span class="chip err">500 Server Error</span></td><td>코드에서 예외</td><td>runserver 터미널의 마지막 줄이 원인</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+</section>
+
+<!-- ============ CODE ============ -->
+<section class="view" id="v-code" hidden>
+  <div class="section-head">
+    <span class="eyebrow">정답 코드</span>
+    <h1>9문제를 모두 고친 최종 파일</h1>
+    <p class="lede">주석의 <code>[NN]</code>은 문제 번호입니다. 자동 채점기로 80 / 80을 확인한 코드입니다. 그대로 외우기보다 연습 문제를 풀고 비교하는 용도로 쓰세요.</p>
+  </div>
+  <div class="panel">
+    <div class="card-title"><h2 class="mono" style="font-size:1rem">books/serializers.py</h2><button class="btn" data-copy="ser" style="margin-left:auto">복사</button></div>
+    <div id="code-ser"></div>
+  </div>
+  <div class="panel">
+    <div class="card-title"><h2 class="mono" style="font-size:1rem">books/views.py</h2><button class="btn" data-copy="views" style="margin-left:auto">복사</button></div>
+    <div id="code-views"></div>
+  </div>
+</section>
+
 <!-- ============ ERRORS ============ -->
 <section class="view" id="v-errors" hidden>
   <div class="section-head">
@@ -382,6 +469,49 @@ textarea { width: 100%; min-height: 120px; font: inherit; font-size: 0.92rem; pa
   <label for="esearch" class="eyebrow">검색</label>
   <input class="search" id="esearch" type="search" placeholder="예: 405, required, AttributeError, is_valid">
   <div class="err-list" id="elist"></div>
+</section>
+
+<!-- ============ TOOLS ============ -->
+<section class="view" id="v-tools" hidden>
+  <div class="section-head">
+    <span class="eyebrow">실습 도구 · 레포 tools/</span>
+    <h1>버그를 심고, 고치고, 채점하기</h1>
+    <p class="lede">레포의 <code>tools/</code>에 두 개의 스크립트가 있습니다. 연습 문제 생성기는 <code>skeleton/</code>을 복사해 버그를 새로 심고, 자동 채점기는 Postman 대신 9개 요청을 보내 PASS/FAIL을 알려 줍니다. 둘 다 원본 <code>skeleton/</code>과 <code>db.sqlite3</code>는 건드리지 않습니다.</p>
+  </div>
+
+  <div class="panel">
+    <h2>준비 (처음 한 번)</h2>
+<pre class="code"><span class="ln"><span class="mk"></span><span class="cm"># 레포 루트(Debugging-Django)에서</span></span><span class="ln"><span class="mk"></span>python -m venv venv</span><span class="ln"><span class="mk"></span>venv\Scripts\activate</span><span class="ln"><span class="mk"></span>pip install -r skeleton/requirements.txt</span></pre>
+  </div>
+
+  <div class="panel">
+    <h2>1. 연습 문제 만들기</h2>
+<pre class="code"><span class="ln"><span class="mk"></span><span class="cm"># 시험과 같은 버그 9개를 practice/ 에 재현</span></span><span class="ln"><span class="mk"></span>python tools/make_practice.py</span><span class="ln"><span class="mk"></span></span><span class="ln"><span class="mk"></span><span class="cm"># 변형 버그 20개 중 6개를 무작위로 (재시험 대비)</span></span><span class="ln"><span class="mk"></span>python tools/make_practice.py --mode random --count 6 --force</span><span class="ln"><span class="mk"></span></span><span class="ln"><span class="mk"></span><span class="cm"># 같은 문제를 다시 풀고 싶으면 seed 고정</span></span><span class="ln"><span class="mk"></span>python tools/make_practice.py --mode random --seed 3 --force</span></pre>
+    <ul class="clean">
+      <li><code>practice/PRACTICE.md</code>에 시험지처럼 증상과 수정 파일만 적혀 있습니다.</li>
+      <li><code>practice/ANSWERS.md</code>에 정답이 있습니다. 다 풀고 나서 여세요.</li>
+      <li>버그 위치가 드러나지 않도록 정답 주석은 모두 지워집니다.</li>
+      <li><code>practice/</code>는 <code>.gitignore</code>에 들어 있어 커밋되지 않습니다.</li>
+    </ul>
+  </div>
+
+  <div class="panel">
+    <h2>2. 고친 뒤 채점하기</h2>
+<pre class="code"><span class="ln"><span class="mk"></span>python tools/grade.py practice     <span class="cm"># 연습 프로젝트 채점</span></span><span class="ln"><span class="mk"></span>python tools/grade.py skeleton     <span class="cm"># 내 시험 코드 채점</span></span></pre>
+    <p class="lede">임시 DB를 fixtures로 새로 채우고 검사마다 되돌리므로, 몇 번을 돌려도 같은 데이터에서 시작합니다. 서버가 못 뜨는 상태(SyntaxError 등)면 그 사실을 먼저 알려 줍니다.</p>
+<pre class="code"><span class="ln"><span class="mk"></span>  PASS  [01] 도서 목록 응답 필드</span><span class="ln"><span class="mk"></span>  PASS  [02] 도서 생성 201</span><span class="ln"><span class="mk"></span>  FAIL  [03] 댓글 생성 (content만)</span><span class="ln"><span class="mk"></span>        상태 코드 400 (기대값 201) · 응답: {'book': ['This field is required.']}</span><span class="ln"><span class="mk"></span>  ...</span><span class="ln"><span class="mk"></span>  코드 문항 점수: 45 / 80</span><span class="ln"><span class="mk"></span>  다시 볼 문제: 03, 04, 06, 07</span></pre>
+    <div class="callout"><b>채점기가 확인하지 못하는 것</b>지정 파일 외 수정 여부, 주석 유무, 서술형 답안은 직접 확인해야 합니다. 시험 채점 기준과 똑같다는 보장도 없으니, 마지막엔 Postman으로 한 번 더 요청을 보내 보세요.</div>
+  </div>
+
+  <div class="panel">
+    <h2>추천 연습 순서</h2>
+    <ul class="clean">
+      <li><b>1회차:</b> <code>--mode exam</code>으로 원본 9문제를 시간 재고(50분) 풀기 → 채점 → 문제 탭에서 틀린 것 복습</li>
+      <li><b>2회차:</b> <code>--mode random --count 6</code>을 seed 없이 2–3번. 처음 보는 500 에러는 에러 사전에서 검색</li>
+      <li><b>3회차:</b> 아무것도 보지 않고 서술형 10·11을 다시 쓰고 모범 답안과 비교</li>
+      <li><b>시험 전날:</b> 개념 정리 탭과 제출 체크리스트만 훑기</li>
+    </ul>
+  </div>
 </section>
 
 <!-- ============ CHECKLIST ============ -->
@@ -676,6 +806,18 @@ textarea { width: 100%; min-height: 120px; font: inherit; font-size: 0.92rem; pa
       ] }
   ];
 
+  const REQ = {
+    '01': ['GET http://127.0.0.1:8000/api/v1/books/', '', '# 확인: 각 항목의 키가 id, title, author, num_of_comments 뿐인지'],
+    '02': ['POST http://127.0.0.1:8000/api/v1/books/', '{', '    "title": "어린 왕자",', '    "author": "생텍쥐페리",', '    "content": "가장 중요한 것은 눈에 보이지 않는다."', '}', '', '# 확인: 상태 201 Created, 응답에 새 id'],
+    '03': ['POST http://127.0.0.1:8000/api/v1/books/4/comments/', '{', '    "content": "싱클레어의 성장이 인상 깊었어요."', '}', '', '# 확인: 201 Created, 응답에 "book": 4'],
+    '04': ['PUT http://127.0.0.1:8000/api/v1/books/2/', '{', '    "title": "클린 코드 (개정판)"', '}', '', '# 확인: 200 OK, title만 바뀌고 author·content는 그대로'],
+    '05': ['DELETE http://127.0.0.1:8000/api/v1/books/<남아 있는 번호>/', '', '# 확인: 204 No Content, 본문 없음', '# 같은 번호로 다시 보내면 404 (이미 삭제됨)'],
+    '06': ['GET http://127.0.0.1:8000/api/v1/books/1/', '', '# 확인: "comment_set": [{"id": .., "content": ".."}, ...]'],
+    '07': ['GET http://127.0.0.1:8000/api/v1/books/', '', '# 확인: 초기 데이터 기준 num_of_comments가 3, 1, 2, 0, 0', '# (연습 중 댓글을 지웠다면 숫자가 줄어든 게 정상)'],
+    '08': ['DELETE http://127.0.0.1:8000/api/v1/comments/<남아 있는 번호>/', '', '# 확인: 204 No Content', '# 남은 댓글 번호는 GET /api/v1/comments/ 로 확인'],
+    '09': ['PUT http://127.0.0.1:8000/api/v1/comments/<남아 있는 번호>/', '{', '    "content": "두 번째 읽으니 더 좋네요.",', '    "book": 1', '}', '', '# 확인: 200 OK, 응답 content가 바뀌고 updated_at이 갱신', '# 03번을 고친 뒤에는 body의 book은 무시됨 (정상)']
+  };
+
   const methodCls = m => 'method m-' + m;
   const statusChip = (s) => {
     const code = parseInt(s, 10);
@@ -708,6 +850,10 @@ textarea { width: 100%; min-height: 120px; font: inherit; font-size: 0.92rem; pa
           <div class="good"><span class="lbl">정상 동작</span>${statusChip(p.good[0])}<span>${esc(p.good[1])}</span></div>
         </div>
         <div class="mine">내 스켈레톤: ${p.mine ? '<span class="chip ok">이미 고쳐져 동작함</span> 고친 줄에 설명 주석이 있는지 확인하세요.' : '<span class="chip err">아직 버그 그대로</span>'}</div>
+        <details class="step"><summary>Postman으로 확인하기</summary><div class="inner">
+          ${codeBlock(REQ[p.no].map(l => ' ' + l).join('\n'))}
+          <p class="lede" style="font-size:.88rem">Body는 raw · JSON으로 보냅니다. URL 끝의 <code>/</code>를 빼먹지 마세요.</p>
+        </div></details>
         <div>
           <span class="eyebrow">버그가 든 코드 · ${p.file}</span>
           ${codeBlock(p.buggy)}
@@ -902,8 +1048,174 @@ textarea { width: 100%; min-height: 120px; font: inherit; font-size: 0.92rem; pa
     ta.addEventListener('input', () => store.set(id, ta.value));
   });
 
+  // ---------- final code ----------
+  const CODE = {
+    ser: `from rest_framework import serializers
+from .models import Book, Comment
+
+
+# 도서 목록 조회용 serializer
+class BookListSerializer(serializers.ModelSerializer):
+    num_of_comments = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Book
+        # [01] 목록 조회에는 id, title, author, num_of_comments만 응답
+        fields = ('id', 'title', 'author', 'num_of_comments')
+
+    def get_num_of_comments(self, obj):
+        # [07] obj(현재 직렬화 중인 도서)에 달린 댓글만 역참조로 세어 반환
+        return obj.comment_set.count()
+
+
+# 도서 생성 / 수정용 serializer
+class BookSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Book
+        fields = '__all__'
+
+
+# 도서 상세 조회용 serializer (댓글 목록 포함)
+class BookDetailSerializer(serializers.ModelSerializer):
+    class CommentDetailSerializer(serializers.ModelSerializer):
+        class Meta:
+            model = Comment
+            # [06] 상세 조회에 포함할 댓글 정보는 id, content만 지정
+            fields = ('id', 'content')
+
+    # [06] related_name이 없으므로 역참조 이름은 comment_set
+    comment_set = CommentDetailSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Book
+        fields = '__all__'
+
+
+# 댓글 serializer
+class CommentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Comment
+        fields = '__all__'
+        # [03] book은 URL의 book_pk로 views에서 save(book=book)로 넣어 주므로
+        # 입력 검증에서는 제외하고 응답에만 포함되도록 읽기 전용으로 지정
+        read_only_fields = ('book',)`,
+    views: `from rest_framework.response import Response
+from rest_framework.decorators import api_view
+from rest_framework import status
+from django.shortcuts import get_object_or_404, get_list_or_404
+from .models import Book, Comment
+from .serializers import (
+    BookListSerializer,
+    BookSerializer,
+    BookDetailSerializer,
+    CommentSerializer,
+)
+
+
+@api_view(['GET', 'POST'])
+def book_list(request):
+    if request.method == 'GET':
+        books = get_list_or_404(Book)
+        serializer = BookListSerializer(books, many=True)
+        return Response(serializer.data)
+
+    elif request.method == 'POST':
+        serializer = BookSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            # [02] 생성에 성공하면 201 Created 상태 코드로 응답
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['GET', 'PUT', 'DELETE'])
+def book_detail(request, book_pk):
+    book = get_object_or_404(Book, pk=book_pk)
+
+    if request.method == 'GET':
+        serializer = BookDetailSerializer(book)
+        return Response(serializer.data)
+
+    elif request.method == 'PUT':
+        # [04] partial=True: 요청에 담긴 필드만 검증하고 수정하는 부분 수정
+        serializer = BookSerializer(book, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    elif request.method == 'DELETE':
+        book.delete()
+        # [05] 삭제에 성공하면 응답 본문 없이 204 No Content로 응답
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+@api_view(['GET'])
+def comment_list(request):
+    comments = get_list_or_404(Comment)
+    serializer = CommentSerializer(comments, many=True)
+    return Response(serializer.data)
+
+
+# [08] 댓글 단건 조회·수정에 더해 삭제(DELETE) 요청도 허용
+@api_view(['GET', 'PUT', 'DELETE'])
+def comment_detail(request, comment_pk):
+    comment = get_object_or_404(Comment, pk=comment_pk)
+
+    if request.method == 'GET':
+        serializer = CommentSerializer(comment)
+        return Response(serializer.data)
+
+    elif request.method == 'PUT':
+        serializer = CommentSerializer(comment, data=request.data)
+        if serializer.is_valid():
+            # [09] 검증된 데이터를 DB에 저장(instance가 있으므로 update 수행)
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    elif request.method == 'DELETE':
+        comment.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+@api_view(['POST'])
+def comment_create(request, book_pk):
+    book = get_object_or_404(Book, pk=book_pk)
+    serializer = CommentSerializer(data=request.data)
+    if serializer.is_valid():
+        serializer.save(book=book)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)`
+  };
+  // 정답 주석 줄([NN])을 강조해서 보여 줌
+  function finalBlock(src) {
+    return '<pre class="code">' + src.split('\n').map(l => {
+      const isFix = /# \[\d\d\]/.test(l) || false;
+      let h = esc(l).replace(/(#.*)$/, '<span class="cm">$1</span>');
+      return `<span class="ln${isFix ? ' add' : ''}"><span class="mk">${isFix ? '›' : ''}</span>${h}</span>`;
+    }).join('') + '</pre>';
+  }
+  document.getElementById('code-ser').innerHTML = finalBlock(CODE.ser);
+  document.getElementById('code-views').innerHTML = finalBlock(CODE.views);
+  document.querySelectorAll('[data-copy]').forEach(b => {
+    b.addEventListener('click', () => {
+      const text = CODE[b.dataset.copy];
+      const done = () => { b.textContent = '복사됨'; setTimeout(() => { b.textContent = '복사'; }, 1500); };
+      try {
+        navigator.clipboard.writeText(text).then(done, () => selectFallback(b));
+      } catch (e) { selectFallback(b); }
+    });
+  });
+  function selectFallback(b) {
+    const pre = b.closest('.panel').querySelector('pre');
+    const r = document.createRange(); r.selectNodeContents(pre);
+    const s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+    b.textContent = 'Ctrl+C로 복사';
+  }
+
   // ---------- routing ----------
-  const views = ['overview', 'problems', 'essay', 'quiz', 'errors', 'checklist'];
+  const views = ['overview', 'problems', 'essay', 'quiz', 'concepts', 'code', 'errors', 'tools', 'checklist'];
   function route() {
     let h = (location.hash || '#overview').slice(1);
     let target = null;
